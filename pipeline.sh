@@ -4,37 +4,67 @@
 # It takes the multi-fast5 files as input and outputs the re-squiggled single-fast5 files.
 # The re-squiggled single-fast5 files are then used for the downstream analysis.
 
-# fast5_dir: The directory containing the multi-fast5 files.
-fast5_dir=/home/eason/test/0318_1
-# fastq_dir: The directory where the fastq files will be saved.
-fastq_dir=/home/eason/test/0318_1/guppy
-# ref_fasta: The reference genome in fasta format.
-ref_fasta=/home/eason/test/0318_1/ref_960.fasta
+# Environment: The pipeline is tested on Ubuntu 20.04 LTS.
+# The following softwares are required:
+# 1. Guppy: https://community.nanoporetech.com/downloads
+# 2. ont_fast5_api: https://github.com/nanoporetech/ont_fast5_api
+# 3. Tombo: https://github.com/nanoporetech/tombo
+# 4. vbz_compression: https://github.com/nanoporetech/vbz_compression
+# 5. minimap2: https://github.com/lh3/minimap2
 
+case $# in
+  2) ;;
+  *) echo "Usage: $0 <base_dir> <ref_fasta>" >&2
+     exit 1 ;;
+esac
+
+if [ ! -d "$1" ]; then
+  echo "Error: $1 is not a directory" >&2
+  exit 1
+fi
+
+case "$2" in
+  *.fa|*.fasta) ;;
+  *) echo "Error: $2 is not a fasta file" >&2
+     exit 1 ;;
+esac
+
+# base_dir: The base directory of the data.
+base_dir=$1
+# ref_fasta: The reference genome in fasta format.
+ref_fasta=$2
 
 # The pipeline is divided into 3 parts:
-# 1. Basecalling: The multi-fast5 files are basecalled using the Guppy basecaller.
+# 1. Multi-to-single: The multi-fast5 files are converted to single-fast5 files using the ont_fast5_api.
+echo "################################"
+echo "########### Pipeline ###########"
+echo "################################"
+echo "######## Multi-to-single #######"
+multi_to_single_fast5 \
+ --input_path "$base_dir" \
+ --save_path "$base_dir"/single \
+ --recursive --threads 12
+
+# 2. Basecalling: The multi-fast5 files are basecalled using the Guppy basecaller.
+echo "########## Basecalling ##########"
 guppy_basecaller \
-  --input_path "$fast5_dir" \
-  --save_path "$fastq_dir" \
+  --input_path "$base_dir"/single \
+  --save_path "$base_dir"/guppy \
   --config dna_r9.4.1_450bps_hac.cfg \
   --device cuda:0 --recursive
-cat "$fastq_dir"/*/*.fastq > "$fastq_dir"/all.fastq
+cat "$base_dir"/guppy/*/*.fastq > "$base_dir"/guppy/all.fastq
 
-# 2. Multi-to-single: The multi-fast5 files are converted to single-fast5 files using the ont_fast5_api.
-multi_to_single_fast5 \
-  --input_path "$fast5_dir" \
-  --save_path "$fast5_dir"/single \
-  --recursive --threads 12
-
-# 3. Resquiggle: The single-fast5 files are re-squiggled using the Guppy resquiggle.
+# 3. Annotate and resquiggle: The single-fast5 files are annotated and re-squiggled using the Tombo.
+echo "########## Annotate ##########"
 tombo preprocess annotate_raw_with_fastqs \
-  --fast5-basedir "$fast5_dir"/single \
-  --fastq-filenames "$fastq_dir"/all.fastq \
+  --fast5-basedir "$base_dir"/single \
+  --fastq-filenames "$base_dir"/guppy/all.fastq \
+  --sequencing-summary-filenames "$base_dir"/guppy/sequencing_summary.txt \
   --overwrite --processes 12
 
+echo "########## Resquiggle ##########"
 tombo resquiggle \
-  "$fast5_dir"/single \
+  "$base_dir"/single \
   "$ref_fasta" \
   --processes 12 \
   --overwrite
