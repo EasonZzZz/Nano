@@ -1,0 +1,5 @@
+vbz-h5py-plugin~=1.0.1
+h5py>=3.1.0
+scipy==1.7.3
+ont-tombo>=1.5.1
+ont-fast5-api>=3.3.0
