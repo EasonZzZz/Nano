@@ -238,7 +238,7 @@ def _extract_batch_features(
 
 
 def _write_features(
-        features_queue, output_dir, overwrite, output_batch_size
+        features_queue, output_dir, overwrite
 ):
     """
     todo 将特征写入磁盘
@@ -249,7 +249,7 @@ def _write_features(
 def extract_features(
         fast5_dir, recursive, corrected_group, basecall_subgroup, ref_path,
         motifs, mod_loc, kmers, methyl_label,
-        output_dir, overwrite, output_batch_size,
+        output_dir, overwrite,
         processes, batch_size
 ):
     """
@@ -293,7 +293,7 @@ def extract_features(
     p_write = mp.Process(
         target=_write_features,
         args=(
-            features_queue, output_dir, overwrite, output_batch_size
+            features_queue, output_dir, overwrite
         )
     )
     p_write.daemon = True
@@ -372,10 +372,6 @@ def main():
         "--overwrite", "-w", action="store_true", required=False, default=False,
         help="Overwrite existing output files."
     )
-    ep_output.add_argument(
-        "--output_batch_size", "-obs", type=int, required=False, action="store", default=100,
-        help="The number of data files to process in each batch."
-    )
 
     extraction_parser.add_argument(
         "--processes", "-p", type=int, required=False, action="store", default=1,
@@ -400,15 +396,14 @@ def main():
 
     output_dir = args.output_dir
     overwrite = args.overwrite
-    output_batch_size = args.output_batch_size
 
     processes = args.processes
     batch_size = args.batch_size
 
     extract_features(
         fast5_dir, recursive, corrected_group, basecall_subgroup, ref_path,
-        motifs,mod_loc_in_motifs, kmers, methyl_label,
-        output_dir, overwrite, output_batch_size,
+        motifs, mod_loc_in_motifs, kmers, methyl_label,
+        output_dir, overwrite,
         processes, batch_size
     )
 
