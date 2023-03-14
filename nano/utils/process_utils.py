@@ -40,16 +40,16 @@ def complement_sequence(sequence):
 
 def get_fast5s(fast5_dir, recursive=True):
     """
-    Get all fast5 files in a directory.
-    :param fast5_dir: Path to the directory containing fast5 files.
-    :param recursive: Whether to search for fast5 files recursively.
-    :return: A list of paths to fast5 files.
+    Get all data files in a directory.
+    :param fast5_dir: Path to the directory containing data files.
+    :param recursive: Whether to search for data files recursively.
+    :return: A list of paths to data files.
     """
     fast5_dir = os.path.abspath(fast5_dir)
     if recursive:
-        fast5s = glob.glob(os.path.join(fast5_dir, "**", "*.fast5"), recursive=True)
+        fast5s = glob.glob(os.path.join(fast5_dir, "**", "*.data"), recursive=True)
     else:
-        fast5s = glob.glob(os.path.join(fast5_dir, "*.fast5"))
+        fast5s = glob.glob(os.path.join(fast5_dir, "*.data"))
     return fast5s
 
 
@@ -89,6 +89,24 @@ def get_motif_seqs(motifs, is_dna=True):
     for ori_motif in ori_motif_seqs:
         motif_seqs += _convert_motif_seq(ori_motif, is_dna=is_dna)
     return motif_seqs
+
+
+def get_ref_loc_of_methyl_site(seq, motif_set, mod_locs=0):
+    """
+    Get the read locations of the modified sites.
+    :param seq: The sequence to search.
+    :param motif_set: The set of motifs to search for.
+    :param mod_locs: The location of the modified base.
+    :return: A list of the read locations of the modified sites.
+    """
+    seq_len = len(seq)
+    motif_set = set(motif_set)
+    motif_len = len(list(motif_set)[0])
+    sites = []
+    for i in range(seq_len - motif_len + 1):
+        if seq[i:i + motif_len] in motif_set:
+            sites.append(i + mod_locs)
+    return sites
 
 
 class SharedCounter(object):

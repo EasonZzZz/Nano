@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # This script is a pipeline for the analysis of the nanopore sequencing data.
-# It takes the multi-fast5 files as input and outputs the re-squiggled single-fast5 files.
-# The re-squiggled single-fast5 files are then used for the downstream analysis.
+# It takes the multi-data files as input and outputs the re-squiggled single-data files.
+# The re-squiggled single-data files are then used for the downstream analysis.
 
 # Environment: The pipeline is tested on Ubuntu 20.04 LTS.
 # The following softwares are required:
@@ -35,7 +35,7 @@ base_dir=$1
 ref_fasta=$2
 
 # The pipeline is divided into 3 parts:
-# 1. Multi-to-single: The multi-fast5 files are converted to single-fast5 files using the ont_fast5_api.
+# 1. Multi-to-single: The multi-data files are converted to single-data files using the ont_fast5_api.
 echo "################################"
 echo "########### Pipeline ###########"
 echo "################################"
@@ -45,7 +45,7 @@ multi_to_single_fast5 \
  --save_path "$base_dir"/single \
  --recursive --threads 12
 
-# 2. Basecalling: The multi-fast5 files are basecalled using the Guppy basecaller.
+# 2. Basecalling: The multi-data files are basecalled using the Guppy basecaller.
 echo "########## Basecalling ##########"
 guppy_basecaller \
   --input_path "$base_dir"/single \
@@ -54,7 +54,7 @@ guppy_basecaller \
   --device cuda:0 --recursive
 cat "$base_dir"/guppy/*/*.fastq > "$base_dir"/guppy/all.fastq
 
-# 3. Annotate and resquiggle: The single-fast5 files are annotated and re-squiggled using the Tombo.
+# 3. Annotate and resquiggle: The single-data files are annotated and re-squiggled using the Tombo.
 echo "########## Annotate ##########"
 tombo preprocess annotate_raw_with_fastqs \
   --fast5-basedir "$base_dir"/single \
