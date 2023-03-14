@@ -14,14 +14,14 @@ import multiprocessing as mp
 
 from statsmodels.robust import mad
 from statsmodels.stats.stattools import robust_kurtosis, robust_skewness
-from nano.utils.process_utils import Queue, get_fast5s, get_motif_seqs, get_ref_loc_of_methyl_site
+from nano.utils.process_utils import get_fast5s, get_motif_seqs, get_ref_loc_of_methyl_site, Queue
 from nano.utils.ref_helper import DNAReference
 from nano.utils import logging
 
-reads_group = "Raw/Reads"
-global_key = "UniqueGlobalKey"
-queue_size_border = 1000
-sleep_time = 1
+READS_GROUP = "Raw/Reads"
+GLOBAL_KEY = "UniqueGlobalKey"
+QUEUE_SIZE_BORDER = 1000
+SLEEP_TIME = 1
 logger = logging.get_logger("extract_features")
 
 
@@ -52,7 +52,7 @@ def get_raw_signal(fast5_file, corrected_group, basecall_subgroup):
 
     info = {}
     try:
-        raw_signal = list(fast5_data[reads_group].values())[0]
+        raw_signal = list(fast5_data[READS_GROUP].values())[0]
         info["read_id"] = raw_signal.attrs["read_id"].decode("utf-8")
         raw_signal = raw_signal["Signal"][()]
     except Exception:
@@ -60,7 +60,7 @@ def get_raw_signal(fast5_file, corrected_group, basecall_subgroup):
                            " in data file: {}".format(fast5_file))
 
     try:
-        channel_info = dict(list(fast5_data[global_key]["channel_id"].attrs.items()))
+        channel_info = dict(list(fast5_data[GLOBAL_KEY]["channel_id"].attrs.items()))
         scaling = channel_info["range"] / channel_info["digitisation"]
         offset = channel_info["offset"]
         raw_signal = _rescale_signals(raw_signal, scaling, offset)
@@ -112,10 +112,10 @@ def normalize_signal(raw_signal):
 
 def _fill_fast5s_queue(fast5s_queue, fast5s, batch_size):
     """
-    Fill the fast5s queue.
+    Fill the fast5 queue.
     """
-    for i in np.arrange(0, len(fast5s), batch_size):
-        fast5s_queue.put(fast5s[i: i + batch_size])
+    for i in range(0, len(fast5s), batch_size):
+        fast5s_queue.put(fast5s[i:i + batch_size])
     return fast5s_queue
 
 
@@ -135,120 +135,122 @@ def _preprocess(fast5_dir, recursive, motifs, batch_size):
 
 
 def _extract_features(
-        fast5s, corrected_group, basecall_subgroup, ref,
-        motif_seqs, mod_loc, kmers, methyl_label
+        fast5s, error_queue, corrected_group, basecall_subgroup, ref,
+        motif_seqs, mod_loc, kmers, methyl_label, positions
 ):
     """
     Extract features from data files.
-    todo 抽取特征
     """
     num_bases = (kmers - 1) // 2
 
-    features_list = []
+    features = pd.DataFrame()
     for fast5 in fast5s:
-        raw_signal, events, info = get_raw_signal(fast5, corrected_group, basecall_subgroup)
-        if raw_signal is None:
-            continue
-
-        raw_signal = normalize_signal(raw_signal)
-        seq, signal_list = "", []
-        for _, row in events.iterrows():
-            seq += row["base"]
-            signal_list.append(raw_signal[row["start"]: row["start"] + row["length"]])
-
-        strand, chrom, chrom_start, chrom_end = info["strand"], info["chrom"], info["chrom_start"], info["chrom_end"]
         try:
-            chrom_len = ref.get_reference_length(chrom)
-        except KeyError:
-            logger.warning("Chromosome {} not found in reference.".format(chrom))
-            chrom_len = 0
+            raw_signal, events, info = get_raw_signal(fast5, corrected_group, basecall_subgroup)
+            if raw_signal is None:
+                continue
 
-        mod_sites = get_ref_loc_of_methyl_site(seq, motif_seqs, mod_loc)
-        for mod_loc_in_read in mod_sites:
-            if num_bases <= mod_loc_in_read < len(seq) - num_bases:
-                if strand == "-":
-                    pos = chrom_start + len(seq) - mod_loc_in_read - 1
-                    pos_in_ref = chrom_len - pos - 1 if chrom_len > 0 else -1
-                else:
-                    pos = chrom_start + mod_loc_in_read
-                    pos_in_ref = pos if chrom_len > 0 else -1
-                # TODO: add positions in reference
+            raw_signal = normalize_signal(raw_signal)
+            seq, signal_list = "", []
+            for _, row in events.iterrows():
+                seq += row["base"]
+                signal_list.append(raw_signal[row["start"]: row["start"] + row["length"]])
 
-                k_mer = seq[mod_loc_in_read - num_bases: mod_loc_in_read + num_bases + 1]
-                k_mer_signal = signal_list[mod_loc_in_read - num_bases: mod_loc_in_read + num_bases + 1]
-                signal_lens = [len(x) for x in k_mer_signal]
+            strand, chrom, chrom_start, chrom_end = info["strand"], info["chrom"], info["chrom_start"], info[
+                "chrom_end"]
+            try:
+                chrom_len = ref.get_chrom_length(chrom)
+            except KeyError:
+                logger.warning("Chromosome {} not found in reference.".format(chrom))
+                chrom_len = 0
 
-                # TODO: add features
-                signal_means = [np.mean(x) for x in k_mer_signal]
-                signal_stds = [np.std(x) for x in k_mer_signal]
-                signal_skews = [robust_skewness(x)[0] for x in k_mer_signal]
-                signal_kurts = [robust_kurtosis(x)[0] for x in k_mer_signal]
-                signal_max = [np.max(x) for x in k_mer_signal]
-                signal_min = [np.min(x) for x in k_mer_signal]
-                signal_median = [np.median(x) for x in k_mer_signal]
+            mod_sites = get_ref_loc_of_methyl_site(seq, motif_seqs, mod_loc)
+            for mod_loc_in_read in mod_sites:
+                if num_bases <= mod_loc_in_read < len(seq) - num_bases:
+                    if strand == "-":
+                        pos = chrom_start + len(seq) - mod_loc_in_read - 1
+                        pos_in_ref = chrom_len - pos - 1 if chrom_len > 0 else -1
+                    else:
+                        pos = chrom_start + mod_loc_in_read
+                        pos_in_ref = pos if chrom_len > 0 else -1
 
-                features = {
-                    "chrom": chrom,
-                    "strand": strand,
-                    "pos": pos,
-                    "pos_in_ref": pos_in_ref,
-                    "k_mer": k_mer,
-                    "signal_lens": signal_lens,
-                    "signal_means": signal_means,
-                    "signal_stds": signal_stds,
-                    "signal_skews": signal_skews,
-                    "signal_kurts": signal_kurts,
-                    "signal_max": signal_max,
-                    "signal_min": signal_min,
-                    "signal_median": signal_median,
-                    "methyl_label": methyl_label
-                }
-                features_list.append(features)
-    return features_list
+                    if (positions is not None) and ("\t".join([chrom, str(pos_in_ref)]) not in positions):
+                        continue
 
+                    k_mer = seq[mod_loc_in_read - num_bases: mod_loc_in_read + num_bases + 1]
+                    k_mer_signal = signal_list[mod_loc_in_read - num_bases: mod_loc_in_read + num_bases + 1]
+                    signal_lens = [len(x) for x in k_mer_signal]
+                    # todo 排除短信号
 
-def _features_to_str(features):
-    """
-    Convert features to string.
-    todo 转换特征为字符串
-    """
-    return None
+                    # adding features
+                    signal_means = [np.mean(x) for x in k_mer_signal]
+                    signal_stds = [np.std(x) for x in k_mer_signal]
+                    signal_skews = [robust_skewness(x)[0] for x in k_mer_signal]
+                    signal_kurts = [robust_kurtosis(x)[0] for x in k_mer_signal]
+                    signal_max = [np.max(x) for x in k_mer_signal]
+                    signal_min = [np.min(x) for x in k_mer_signal]
+                    signal_median = [np.median(x) for x in k_mer_signal]
+
+                    feature = pd.DataFrame({
+                        "read_id": info["read_id"],
+                        "chrom": chrom,
+                        "pos": pos,
+                        "strand": strand,
+                        "k_mer": k_mer,
+                        "signal_mean": signal_means,
+                        "signal_std": signal_stds,
+                        "signal_skew": signal_skews,
+                        "signal_kurt": signal_kurts,
+                        "signal_max": signal_max,
+                        "signal_min": signal_min,
+                        "signal_median": signal_median,
+                        "signal_len": signal_lens,
+                        "methyl_label": methyl_label
+                    })
+                    features = pd.concat([features, feature], axis=0)
+        except Exception as e:
+            error_queue.put(e)
+            continue
+    return features
 
 
 def _extract_batch_features(
         fast5s_queue, features_queue, error_queue, corrected_group, basecall_subgroup, ref,
-        motif_seqs, mod_loc, kmers, methyl_label
+        motif_seqs, mod_loc, kmers, methyl_label, positions
 ):
     while True:
         fast5s = fast5s_queue.get()
         if fast5s is None:
             break
-        try:
-            features_list = _extract_features(
-                fast5s, corrected_group, basecall_subgroup, ref,
-                motif_seqs, mod_loc, kmers, methyl_label
-            )
-            features_strs = [_features_to_str(features) for features in features_list]
-            features_queue.put(features_strs)
-            while features_queue.qsize() > queue_size_border:
-                time.sleep(sleep_time)
-        except Exception as e:
-            error_queue.put(e)
-            break
+        features_list = _extract_features(
+            fast5s, error_queue, corrected_group, basecall_subgroup, ref,
+            motif_seqs, mod_loc, kmers, methyl_label, positions
+        )
+        features_queue.put(features_list)
+        while features_queue.qsize() > QUEUE_SIZE_BORDER:
+            time.sleep(SLEEP_TIME)
 
 
 def _write_features(
-        features_queue, output_dir, overwrite
+        features_queue, output_file_path, overwrite
 ):
-    """
-    todo 将特征写入磁盘
-    """
-    pass
+    if os.path.exists(output_file_path):
+        if overwrite:
+            os.remove(output_file_path)
+        else:
+            raise RuntimeError("Output file already exists: {}".format(output_file_path))
+    while True:
+        features = features_queue.get()
+        if features is None:
+            break
+        if len(features) == 0:
+            continue
+        features.to_csv(output_file_path, mode='a', index=False)
 
 
 def extract_features(
         fast5_dir, recursive, corrected_group, basecall_subgroup, ref_path,
-        motifs, mod_loc, kmers, methyl_label,
+        motifs, mod_loc, kmers, methyl_label, positions_file,
         output_dir, overwrite,
         processes, batch_size
 ):
@@ -258,15 +260,20 @@ def extract_features(
     if kmers % 2 == 0:
         raise ValueError("kmers must be odd.")
     ref = DNAReference(ref_path)
+    if positions_file is not None:
+        positions = pd.read_csv(positions_file, sep="\t", names=["chrom", "pos"], header=None)
+        positions["pos"] = positions["pos"].astype(str)
+        positions = set(positions.apply(lambda x: "\t".join(x), axis=1))
+    else:
+        positions = None
 
-    start = time.time()
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
+    start = time.time()
     fast5s_queue, motif_seqs, num_fast5s = _preprocess(
         fast5_dir, recursive, motifs, batch_size
     )
-    mod_loc = [int(x) for x in mod_loc.split(",")]
     features_queue = Queue()
     error_queue = Queue()
 
@@ -282,7 +289,7 @@ def extract_features(
             target=_extract_batch_features,
             args=(
                 fast5s_queue, features_queue, error_queue, corrected_group, basecall_subgroup, ref,
-                motif_seqs, mod_loc, kmers, methyl_label
+                motif_seqs, mod_loc, kmers, methyl_label, positions
             )
         )
         p.daemon = True
@@ -290,10 +297,11 @@ def extract_features(
         features_processes.append(p)
 
     # Write the features to disk.
+    output_file_path = os.path.join(output_dir, "features.tsv")
     p_write = mp.Process(
         target=_write_features,
         args=(
-            features_queue, output_dir, overwrite
+            features_queue, output_file_path, overwrite
         )
     )
     p_write.daemon = True
@@ -339,7 +347,7 @@ def main():
         help="The name of the basecall subgroup in the data files."
     )
     ep_input.add_argument(
-        "--ref_path", "-ref", type=str, required=True, action="store",
+        "--reference", "-ref", type=str, required=True, action="store",
         help="Path to ref_path fasta file."
     )
 
@@ -355,12 +363,17 @@ def main():
         help="The location of the modified base in the motifs. "
     )
     ep_extraction.add_argument(
-        "--kmers", "-k", type=int, required=False, action="store", default=7,
+        "--kmers", "-k", type=int, required=False, action="store", default=9,
         help="The number of kmers to extract features for."
     )
     ep_extraction.add_argument(
         "--methyl_label", "-ml", type=int, required=False, action="store", default=1, choices=[0, 1],
         help="The label for the methylated state. This is for training purposes only."
+    )
+    ep_extraction.add_argument(
+        "--positions", "-pos", type=str, required=False, action="store", default=None,
+        help="A tab-separated file containing the positions_file interested."
+             "The first column is the chromosome, the second column is the position."
     )
 
     ep_output = extraction_parser.add_argument_group("Output")
@@ -383,6 +396,7 @@ def main():
     )
 
     args = extraction_parser.parse_args()
+
     fast5_dir = args.fast5_dir
     recursive = args.recursive
     corrected_group = args.corrected_group
@@ -390,9 +404,10 @@ def main():
     ref_path = args.reference
 
     motifs = args.motifs
-    mod_loc_in_motifs = args.mod_loc_in_motifs
+    mod_loc_in_motif = args.mod_loc_in_motif
     kmers = args.kmers
     methyl_label = args.methyl_label
+    positions_file = args.positions
 
     output_dir = args.output_dir
     overwrite = args.overwrite
@@ -402,7 +417,7 @@ def main():
 
     extract_features(
         fast5_dir, recursive, corrected_group, basecall_subgroup, ref_path,
-        motifs, mod_loc_in_motifs, kmers, methyl_label,
+        motifs, mod_loc_in_motif, kmers, methyl_label, positions_file,
         output_dir, overwrite,
         processes, batch_size
     )
