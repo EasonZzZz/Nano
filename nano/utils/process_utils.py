@@ -7,6 +7,12 @@ base_pairs = {
 }
 base2int = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'N': 4}
 int2base = {0: 'A', 1: 'C', 2: 'G', 3: 'T', 4: 'N'}
+iupac_alphabets = {
+    'A': ['A'], 'C': ['C'], 'G': ['G'], 'T': ['T'], 'N': ['A', 'C', 'G', 'T'],
+    'R': ['A', 'G'], 'Y': ['C', 'T'], 'S': ['G', 'C'], 'W': ['A', 'T'],
+    'K': ['G', 'T'], 'M': ['A', 'C'], 'B': ['C', 'G', 'T'], 'D': ['A', 'G', 'T'],
+    'H': ['A', 'C', 'T'], 'V': ['A', 'C', 'G'], 'X': ['A', 'C', 'G', 'T']
+}
 
 
 def display_args(args):
@@ -45,6 +51,44 @@ def get_fast5s(fast5_dir, recursive=True):
     else:
         fast5s = glob.glob(os.path.join(fast5_dir, "*.fast5"))
     return fast5s
+
+
+def _convert_motif_seq(motif_seq, is_dna=True):
+    outbases = []
+    for base in motif_seq:
+        if is_dna:
+            outbases.append(iupac_alphabets[base.upper()])
+        else:
+            pass
+
+    def recursive_permute(base_list):
+        if len(base_list) == 1:
+            return base_list[0]
+        elif len(base_list) == 2:
+            pseqs = []
+            for base in base_list[0]:
+                for base2 in base_list[1]:
+                    pseqs.append(base + base2)
+            return pseqs
+        else:
+            pseqs = recursive_permute(base_list[1:])
+            pseq_list = [base_list[0], pseqs]
+            return recursive_permute(pseq_list)
+
+    return recursive_permute(outbases)
+
+
+def get_motif_seqs(motifs, is_dna=True):
+    """
+    Get all motifs.
+    :param motifs: The motifs to extract features for.
+    :param is_dna: Whether the motifs are DNA motifs.
+    """
+    ori_motif_seqs = motifs.strip().split(",")
+    motif_seqs = []
+    for ori_motif in ori_motif_seqs:
+        motif_seqs += _convert_motif_seq(ori_motif, is_dna=is_dna)
+    return motif_seqs
 
 
 class SharedCounter(object):
