@@ -1,9 +1,13 @@
 """
 this file is used to extract features from the dataset.
+output: a csv file with the following columns:
+    read_id, chrom, pos, strand, k_mer,signal_mean, signal_std, signal_skew,
+    signal_kurt, signal_max, signal_min, signal_median, signal_len, methyl_label
 """
-
+import glob
 import os
 import argparse
+import shutil
 import time
 import warnings
 
@@ -45,6 +49,8 @@ def get_raw_signal(fast5_file, corrected_group, basecall_subgroup):
     try:
         align_status = fast5_data["Analyses"][corrected_group][basecall_subgroup].attrs["status"]
     except Exception:
+        logger.error("Could not find status under Analyses/{}/{}/"
+                     " in data file: {}".format(corrected_group, basecall_subgroup, fast5_file))
         raise RuntimeError("Could not find status under Analyses/{}/{}/"
                            " in data file: {}".format(corrected_group, basecall_subgroup, fast5_file))
     if align_status != "success":
@@ -144,7 +150,7 @@ def _extract_features(
     """
     num_bases = (kmers - 1) // 2
 
-    failed_counter = 0
+    failed_counter, error_counter = 0, 0
     features = pd.DataFrame()
     for fast5 in fast5s:
         try:
@@ -212,9 +218,10 @@ def _extract_features(
                     })
                     features = pd.concat([features, feature], axis=0)
         except Exception as e:
-            error_queue.put(e)
+            error_counter += 1
             logger.error("Error occurred when processing file: {}".format(fast5))
             continue
+    error_queue.put(error_counter)
     failed_align.put(failed_counter)
 
     return features
@@ -227,6 +234,7 @@ def _extract_batch_features(
     while True:
         fast5s = fast5s_queue.get()
         if fast5s is None:
+            fast5s_queue.put(None)
             break
         features_list = _extract_features(
             fast5s, error_queue, failed_align, corrected_group, basecall_subgroup, ref,
@@ -238,26 +246,41 @@ def _extract_batch_features(
 
 
 def _write_features(
-        features_queue, output_file_path, overwrite
+        features_queue, output_dir, overwrite, output_batch_size
 ):
-    if os.path.exists(output_file_path):
+
+    if os.path.exists(output_dir):
         if overwrite:
-            os.remove(output_file_path)
+            files = glob.glob(os.path.join(output_dir, "*.csv"))
+            for f in files:
+                os.remove(f)
         else:
-            raise RuntimeError("Output file already exists: {}".format(output_file_path))
+            raise RuntimeError("Output file already exists: {}".format(output_dir))
+
+    df_buffer = pd.DataFrame()
+    counter = 0
     while True:
         features = features_queue.get()
         if features is None:
             break
         if len(features) == 0:
             continue
-        features.to_csv(output_file_path, mode='a', index=False, header=False)
+        df_buffer = pd.concat([df_buffer, features], axis=0)
+        output_path_file = os.path.join(output_dir, "features_{}.csv".format(counter))
+        if len(df_buffer) >= output_batch_size:
+            df_write = df_buffer.iloc[:output_batch_size]
+            df_buffer = df_buffer.iloc[output_batch_size:]
+            df_write.to_csv(output_path_file, index=False, header=True)
+            counter += 1
+    if len(df_buffer) > 0:
+        output_path_file = os.path.join(output_dir, "features_{}.csv".format(counter))
+        df_buffer.to_csv(output_path_file, index=False, header=True)
 
 
 def extract_features(
         fast5_dir, recursive, corrected_group, basecall_subgroup, ref_path,
         motifs, mod_loc, kmers, methyl_label, positions_file,
-        output_dir, overwrite,
+        output_dir, overwrite, output_batch_size,
         processes, batch_size
 ):
     """
@@ -275,6 +298,7 @@ def extract_features(
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+    logging.init_logger(log_path=os.path.join(output_dir, "extract_features.log"))
 
     start = time.time()
     fast5s_queue, motif_seqs, num_fast5s = _preprocess(
@@ -304,11 +328,10 @@ def extract_features(
         features_processes.append(p)
 
     # Write the features to disk.
-    output_file_path = os.path.join(output_dir, "features.tsv")
     p_write = mp.Process(
         target=_write_features,
         args=(
-            features_queue, output_file_path, overwrite
+            features_queue, output_dir, overwrite, output_batch_size
         )
     )
     p_write.daemon = True
@@ -316,10 +339,9 @@ def extract_features(
 
     error_sum = 0
     while True:
-        running = any([p.is_alive() for p in features_processes])
+        running = any(p.is_alive() for p in features_processes)
         while not error_queue.empty():
-            error_sum += 1
-            logger.error(error_queue.get())
+            error_sum += error_queue.get()
         if not running:
             break
 
@@ -397,6 +419,10 @@ def main():
         "--overwrite", "-w", action="store_true", required=False, default=False,
         help="Overwrite existing output files."
     )
+    ep_output.add_argument(
+        "--output_batch_size", "-obs", type=int, required=False, action="store", default=1000,
+        help="The number of features to write to disk in each batch."
+    )
 
     extraction_parser.add_argument(
         "--processes", "-p", type=int, required=False, action="store", default=1,
@@ -423,6 +449,7 @@ def main():
 
     output_dir = args.output_dir
     overwrite = args.overwrite
+    output_batch_size = args.output_batch_size
 
     processes = args.processes
     batch_size = args.batch_size
@@ -430,11 +457,10 @@ def main():
     extract_features(
         fast5_dir, recursive, corrected_group, basecall_subgroup, ref_path,
         motifs, mod_loc_in_motif, kmers, methyl_label, positions_file,
-        output_dir, overwrite,
+        output_dir, overwrite, output_batch_size,
         processes, batch_size
     )
 
 
 if __name__ == "__main__":
-    logging.init_logger(log_path="../output/logs/extract_features.log")
     main()
