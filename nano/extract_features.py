@@ -3,9 +3,9 @@ this file is used to extract features from the dataset.
 """
 
 import os
-import sys
 import argparse
 import time
+import warnings
 
 import h5py
 import numpy as np
@@ -18,6 +18,7 @@ from nano.utils.process_utils import get_fast5s, get_motif_seqs, get_ref_loc_of_
 from nano.utils.ref_helper import DNAReference
 from nano.utils import logging
 
+warnings.filterwarnings("ignore")
 READS_GROUP = "Raw/Reads"
 GLOBAL_KEY = "UniqueGlobalKey"
 QUEUE_SIZE_BORDER = 1000
@@ -47,7 +48,7 @@ def get_raw_signal(fast5_file, corrected_group, basecall_subgroup):
         raise RuntimeError("Could not find status under Analyses/{}/{}/"
                            " in data file: {}".format(corrected_group, basecall_subgroup, fast5_file))
     if align_status != "success":
-        print("Alignment failed for data file: {}".format(fast5_file), file=sys.stderr)
+        logger.info("Alignment failed for file: {}".format(fast5_file))
         return None, None, None
 
     info = {}
@@ -103,7 +104,7 @@ def normalize_signal(raw_signal):
     """
     Normalize the raw signal.
     """
-    # try zsore
+    # try z-sore
     # return (raw_signal - np.mean(raw_signal)) / np.std(raw_signal)
 
     # try mad
@@ -121,12 +122,12 @@ def _fill_fast5s_queue(fast5s_queue, fast5s, batch_size):
 
 def _preprocess(fast5_dir, recursive, motifs, batch_size):
     """
-    Preprocess the data files.
+    Preprocess the fast5 files.
     """
     fast5s = get_fast5s(fast5_dir, recursive)
     if len(fast5s) == 0:
-        raise RuntimeError("No data files found in directory: {}".format(fast5_dir))
-    print("Found {} data files.".format(len(fast5s)))
+        raise RuntimeError("No fast5 files found in directory: {}".format(fast5_dir))
+    logger.info("Found {} fast5 files.".format(len(fast5s)))
     fast5s_queue = _fill_fast5s_queue(Queue(), fast5s, batch_size)
 
     motif_seqs = get_motif_seqs(motifs)
@@ -135,19 +136,21 @@ def _preprocess(fast5_dir, recursive, motifs, batch_size):
 
 
 def _extract_features(
-        fast5s, error_queue, corrected_group, basecall_subgroup, ref,
+        fast5s, error_queue, failed_align, corrected_group, basecall_subgroup, ref,
         motif_seqs, mod_loc, kmers, methyl_label, positions
 ):
     """
-    Extract features from data files.
+    Extract features from fast5 files.
     """
     num_bases = (kmers - 1) // 2
 
+    failed_counter = 0
     features = pd.DataFrame()
     for fast5 in fast5s:
         try:
             raw_signal, events, info = get_raw_signal(fast5, corrected_group, basecall_subgroup)
             if raw_signal is None:
+                failed_counter += 1
                 continue
 
             raw_signal = normalize_signal(raw_signal)
@@ -156,8 +159,8 @@ def _extract_features(
                 seq += row["base"]
                 signal_list.append(raw_signal[row["start"]: row["start"] + row["length"]])
 
-            strand, chrom, chrom_start, chrom_end = info["strand"], info["chrom"], info["chrom_start"], info[
-                "chrom_end"]
+            strand, chrom = info["strand"], info["chrom"]
+            chrom_start, chrom_end = info["chrom_start"], info["chrom_end"]
             try:
                 chrom_len = ref.get_chrom_length(chrom)
             except KeyError:
@@ -210,12 +213,15 @@ def _extract_features(
                     features = pd.concat([features, feature], axis=0)
         except Exception as e:
             error_queue.put(e)
+            logger.error("Error occurred when processing file: {}".format(fast5))
             continue
+    failed_align.put(failed_counter)
+
     return features
 
 
 def _extract_batch_features(
-        fast5s_queue, features_queue, error_queue, corrected_group, basecall_subgroup, ref,
+        fast5s_queue, features_queue, error_queue, failed_align, corrected_group, basecall_subgroup, ref,
         motif_seqs, mod_loc, kmers, methyl_label, positions
 ):
     while True:
@@ -223,7 +229,7 @@ def _extract_batch_features(
         if fast5s is None:
             break
         features_list = _extract_features(
-            fast5s, error_queue, corrected_group, basecall_subgroup, ref,
+            fast5s, error_queue, failed_align, corrected_group, basecall_subgroup, ref,
             motif_seqs, mod_loc, kmers, methyl_label, positions
         )
         features_queue.put(features_list)
@@ -245,7 +251,7 @@ def _write_features(
             break
         if len(features) == 0:
             continue
-        features.to_csv(output_file_path, mode='a', index=False)
+        features.to_csv(output_file_path, mode='a', index=False, header=False)
 
 
 def extract_features(
@@ -255,7 +261,7 @@ def extract_features(
         processes, batch_size
 ):
     """
-    Extract features from data files.
+    Extract features from fast5 files.
     """
     if kmers % 2 == 0:
         raise ValueError("kmers must be odd.")
@@ -276,6 +282,7 @@ def extract_features(
     )
     features_queue = Queue()
     error_queue = Queue()
+    failed_align = Queue()
 
     # Need a process to write the features to disk.
     if processes > 1:
@@ -288,7 +295,7 @@ def extract_features(
         p = mp.Process(
             target=_extract_batch_features,
             args=(
-                fast5s_queue, features_queue, error_queue, corrected_group, basecall_subgroup, ref,
+                fast5s_queue, features_queue, error_queue, failed_align, corrected_group, basecall_subgroup, ref,
                 motif_seqs, mod_loc, kmers, methyl_label, positions
             )
         )
@@ -312,7 +319,7 @@ def extract_features(
         running = any([p.is_alive() for p in features_processes])
         while not error_queue.empty():
             error_sum += 1
-            print(error_queue.get())
+            logger.error(error_queue.get())
         if not running:
             break
 
@@ -321,30 +328,35 @@ def extract_features(
     features_queue.put(None)
     p_write.join()
 
-    print("Extracted features from {} data files in {} seconds.".format(num_fast5s, time.time() - start))
-    print("Encountered {} errors.".format(error_sum))
+    failed_counter = 0
+    while not failed_align.empty():
+        failed_counter += failed_align.get()
+
+    logger.info("Extracted features from {} fast5 files in {:.2f} seconds.".format(num_fast5s, time.time() - start))
+    logger.info("Failed to align {} reads.".format(failed_counter))
+    logger.info("Encountered {} errors.".format(error_sum))
 
 
 def main():
     extraction_parser = argparse.ArgumentParser(
-        "Extract features from data files corrected by Tombo."
+        "Extract features from fast5 files corrected by Tombo."
     )
     ep_input = extraction_parser.add_argument_group("Input")
     ep_input.add_argument(
         "--fast5_dir", "-i", type=str, required=True, action="store",
-        help="Path to data files corrected by Tombo."
+        help="Path to fast5 files corrected by Tombo."
     )
     ep_input.add_argument(
         "--recursive", "-r", action="store_true", required=False, default=True,
-        help="Recursively search for data files in the input directory."
+        help="Recursively search for fast5 files in the input directory."
     )
     ep_input.add_argument(
         "--corrected_group", "-c", type=str, required=False, default="RawGenomeCorrected_000",
-        help="The name of the corrected group in the data files."
+        help="The name of the corrected group in the fast5 files."
     )
     ep_input.add_argument(
         "--basecall_subgroup", "-b", type=str, required=False, default="BaseCalled_template",
-        help="The name of the basecall subgroup in the data files."
+        help="The name of the basecall subgroup in the fast5 files."
     )
     ep_input.add_argument(
         "--reference", "-ref", type=str, required=True, action="store",
@@ -392,7 +404,7 @@ def main():
     )
     extraction_parser.add_argument(
         "--batch_size", "-bs", type=int, required=False, action="store", default=100,
-        help="The number of data files to process in each batch."
+        help="The number of fast5 files to process in each batch."
     )
 
     args = extraction_parser.parse_args()
@@ -424,4 +436,5 @@ def main():
 
 
 if __name__ == "__main__":
+    logging.init_logger(log_path="../output/logs/extract_features.log")
     main()

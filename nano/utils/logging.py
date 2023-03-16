@@ -37,7 +37,7 @@ class MyFormatter(logging.Formatter):
 
 
 def init_logger(
-    out_dir=None, out_suffix=None, log_fn=None, quiet=False, silent=False
+    out_dir=None, out_suffix=None, log_path=None, quiet=False, silent=False
 ):
     """Prepare logging output. Output file will be opened if out_dir or log_fn
     are specified. out_suffix will be added to the standard log.txt filename in
@@ -47,12 +47,12 @@ def init_logger(
     """
     log_fp = None
     if out_dir is not None:
-        log_fn = os.path.join(out_dir, LOG_FILENAME)
+        log_path = os.path.join(out_dir, LOG_FILENAME)
         if out_suffix is not None:
-            base_fn, fn_ext = os.path.splitext(log_fn)
-            log_fn = base_fn + "." + out_suffix + fn_ext
-    if log_fn is not None:
-        log_fp = logging.FileHandler(log_fn, "w")
+            base_fn, fn_ext = os.path.splitext(log_path)
+            log_path = base_fn + "." + out_suffix + fn_ext
+    if log_path is not None:
+        log_fp = logging.FileHandler(log_path, "w")
         log_fp.setLevel(logging.DEBUG)
         log_fp.setFormatter(MyFormatter())
 
