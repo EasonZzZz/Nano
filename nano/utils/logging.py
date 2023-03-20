@@ -3,6 +3,11 @@ import os
 import sys
 
 LOG_FILENAME = 'nano.log'
+DEBUG = logging.DEBUG
+INFO = logging.INFO
+WARNING = logging.WARNING
+ERROR = logging.ERROR
+CRITICAL = logging.CRITICAL
 
 
 class MyFormatter(logging.Formatter):
@@ -72,8 +77,10 @@ def init_logger(
     root_logger.addHandler(console)
 
 
-def get_logger(module_name=""):
-    return logging.getLogger(module_name)
+def get_logger(module_name="", level=logging.DEBUG):
+    logger = logging.getLogger(module_name)
+    logger.setLevel(level)
+    return logger
 
 
 if __name__ == "__main__":

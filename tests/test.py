@@ -1,3 +1,6 @@
+import glob
+import os
+
 import pandas as pd
 
 from nano import extract_features
@@ -37,13 +40,9 @@ import matplotlib.pyplot as plt
 # df = pd.concat([df, features], axis=0)
 # print(df)
 
-from nano.utils.process_utils import Queue
+import nano.dataloader
 
-queue = Queue()
-queue.put(1)
-queue.put(2)
-queue.put(3)
-print(queue.get())
-print(queue.get())
-print(queue.get())
-print(queue.get())
+data_dir = "../output"
+dataset = nano.dataloader.SignalFeatureData(data_dir=data_dir)
+print(len(dataset))
+print(dataset[0])

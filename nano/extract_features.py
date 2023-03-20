@@ -2,12 +2,12 @@
 this file is used to extract features from the dataset.
 output: a csv file with the following columns:
     read_id, chrom, pos, strand, k_mer,signal_mean, signal_std, signal_skew,
-    signal_kurt, signal_max, signal_min, signal_median, signal_len, methyl_label
+    signal_kurt, signal_max, signal_min, signal_median, signal_length, methyl_label
 """
 import glob
 import os
 import argparse
-import shutil
+import random
 import time
 import warnings
 
@@ -27,7 +27,7 @@ READS_GROUP = "Raw/Reads"
 GLOBAL_KEY = "UniqueGlobalKey"
 QUEUE_SIZE_BORDER = 1000
 SLEEP_TIME = 1
-logger = logging.get_logger("extract_features")
+logger = logging.get_logger("extract_features", level=logging.INFO)
 
 
 def _rescale_signals(raw_signal, scaling, offset):
@@ -48,13 +48,13 @@ def get_raw_signal(fast5_file, corrected_group, basecall_subgroup):
 
     try:
         align_status = fast5_data["Analyses"][corrected_group][basecall_subgroup].attrs["status"]
-    except Exception:
+    except KeyError:
         logger.error("Could not find status under Analyses/{}/{}/"
                      " in data file: {}".format(corrected_group, basecall_subgroup, fast5_file))
-        raise RuntimeError("Could not find status under Analyses/{}/{}/"
-                           " in data file: {}".format(corrected_group, basecall_subgroup, fast5_file))
+        align_status = None
+
     if align_status != "success":
-        logger.info("Alignment failed for file: {}".format(fast5_file))
+        logger.debug("Alignment status is not success for file: {}".format(fast5_file))
         return None, None, None
 
     info = {}
@@ -63,6 +63,7 @@ def get_raw_signal(fast5_file, corrected_group, basecall_subgroup):
         info["read_id"] = raw_signal.attrs["read_id"].decode("utf-8")
         raw_signal = raw_signal["Signal"][()]
     except Exception:
+        fast5_data.close()
         raise RuntimeError("Could not find raw signal under Raw/Reads/Read_[read#]"
                            " in data file: {}".format(fast5_file))
 
@@ -72,6 +73,7 @@ def get_raw_signal(fast5_file, corrected_group, basecall_subgroup):
         offset = channel_info["offset"]
         raw_signal = _rescale_signals(raw_signal, scaling, offset)
     except Exception:
+        fast5_data.close()
         raise RuntimeError("Could not find channel info under UniqueGlobalKey/channel_id"
                            " in data file: {}".format(fast5_file))
 
@@ -82,12 +84,14 @@ def get_raw_signal(fast5_file, corrected_group, basecall_subgroup):
         info["chrom_start"] = alignment["mapped_start"]
         info["chrom_end"] = alignment["mapped_end"]
     except Exception:
+        fast5_data.close()
         raise RuntimeError("Could not find strand under Analyses/{}/{}/Alignment"
                            " in data file: {}".format(corrected_group, basecall_subgroup, fast5_file))
 
     try:
         events = fast5_data["Analyses"][corrected_group][basecall_subgroup]["Events"]
     except Exception:
+        fast5_data.close()
         raise RuntimeError("Could not find events under Analyses/{}/{}/Events"
                            " in data file: {}".format(corrected_group, basecall_subgroup, fast5_file))
 
@@ -96,6 +100,7 @@ def get_raw_signal(fast5_file, corrected_group, basecall_subgroup):
         read_start_rel_to_raw = events_attrs["read_start_rel_to_raw"]
         starts = list(map(lambda x: x + read_start_rel_to_raw, events["start"]))
     except Exception:
+        fast5_data.close()
         raise RuntimeError("Could not find read_start_rel_to_raw attribute under Analyses/{}/{}/Events"
                            " in data file: {}".format(corrected_group, basecall_subgroup, fast5_file))
 
@@ -103,6 +108,7 @@ def get_raw_signal(fast5_file, corrected_group, basecall_subgroup):
     base = [x.decode("utf-8") for x in events["base"]]
     assert len(starts) == len(lengths) == len(base)
     events = pd.DataFrame({"start": starts, "length": lengths, "base": base})
+    fast5_data.close()
     return raw_signal, events, info
 
 
@@ -139,6 +145,21 @@ def _preprocess(fast5_dir, recursive, motifs, batch_size):
     motif_seqs = get_motif_seqs(motifs)
 
     return fast5s_queue, motif_seqs, len(fast5s)
+
+
+def _get_signal_rect(signals_list, signal_len=16):
+    signal_rect = []
+    for signal in signals_list:
+        signal = list(np.around(signal, 6))
+        if len(signal) < signal_len:
+            pad0_len = signal_len - len(signal)
+            pad0_left = pad0_len // 2
+            pad0_right = pad0_len - pad0_left
+            signal = [0] * pad0_left + signal + [0] * pad0_right
+        elif len(signal) > signal_len:
+            signal = [signal[i] for i in sorted(random.sample(range(len(signal)), signal_len))]
+        signal_rect.append(signal)
+    return signal_rect
 
 
 def _extract_features(
@@ -189,7 +210,6 @@ def _extract_features(
                     k_mer = seq[mod_loc_in_read - num_bases: mod_loc_in_read + num_bases + 1]
                     k_mer_signal = signal_list[mod_loc_in_read - num_bases: mod_loc_in_read + num_bases + 1]
                     signal_lens = [len(x) for x in k_mer_signal]
-                    # todo 排除短信号
 
                     # adding features
                     signal_means = [np.mean(x) for x in k_mer_signal]
@@ -199,6 +219,7 @@ def _extract_features(
                     signal_max = [np.max(x) for x in k_mer_signal]
                     signal_min = [np.min(x) for x in k_mer_signal]
                     signal_median = [np.median(x) for x in k_mer_signal]
+                    k_mer_signal_rect = _get_signal_rect(k_mer_signal)
 
                     feature = pd.DataFrame({
                         "read_id": info["read_id"],
@@ -213,11 +234,12 @@ def _extract_features(
                         "signal_max": signal_max,
                         "signal_min": signal_min,
                         "signal_median": signal_median,
-                        "signal_len": signal_lens,
+                        "signal_length": signal_lens,
+                        "signal_rect": k_mer_signal_rect,
                         "methyl_label": methyl_label
                     })
                     features = pd.concat([features, feature], axis=0)
-        except Exception as e:
+        except Exception:
             error_counter += 1
             logger.error("Error occurred when processing file: {}".format(fast5))
             continue
