@@ -226,7 +226,7 @@ def _extract_features(
                         "chrom": chrom,
                         "pos": pos,
                         "strand": strand,
-                        "k_mer": k_mer,
+                        "kmer": k_mer,
                         "signal_mean": signal_means,
                         "signal_std": signal_stds,
                         "signal_skew": signal_skews,
