@@ -31,6 +31,10 @@ class MyTestCase(unittest.TestCase):
         self.assertNotEqual(len(dataset), 0)
         print(len(dataset))
         print(dataset[0])
+        for i, data in enumerate(dataset):
+            print(data[0])
+            if i == 10:
+                break
 
 
 if __name__ == '__main__':

@@ -77,11 +77,10 @@ class ModelBiLSTM(nn.Module):
     def __init__(
         self, seq_len=13, signal_len=16, num_layers1=3, num_layers2=1, num_classes=2,
         dropout=0.5, hidden_size=256, vocab_size=16, embedding_size=4,
-        using_base=True, using_sigal_len=True, module="Both_BiLSTM", device=0
+        using_base=True, using_signal_len=True, model_type="Both_BiLSTM", device=0
     ):
         super(ModelBiLSTM, self).__init__()
-        self.model_type = "BiLSTM"
-        self.module = module
+        self.model_type = model_type
         self.device = device
 
         self.seq_len = seq_len
@@ -91,23 +90,23 @@ class ModelBiLSTM(nn.Module):
         self.num_classes = num_classes
         self.hidden_size = hidden_size
 
-        if self.module == "Both_BiLSTM":
+        if self.model_type == "Both_BiLSTM":
             self.nhid_seq = hidden_size // 2
             self.nhid_signal = self.hidden_size - self.nhid_seq
-        elif self.module == "Seq_BiLSTM":
+        elif self.model_type == "Seq_BiLSTM":
             self.nhid_seq = hidden_size
             self.nhid_signal = 0
-        elif self.module == "Signal_BiLSTM":
+        elif self.model_type == "Signal_BiLSTM":
             self.nhid_seq = 0
             self.nhid_signal = hidden_size
         else:
             raise ValueError("Invalid module type")
 
         # Seq BiLSTM
-        if self.module != "Signal_BiLSTM":
+        if self.model_type != "Signal_BiLSTM":
             self.embedding = nn.Embedding(vocab_size, embedding_size)
             self.using_base = using_base
-            self.using_sigal_len = using_sigal_len
+            self.using_sigal_len = using_signal_len
             self.signal_feature_num = 3 if self.is_signal_len else 2
             if self.is_base:
                 self.lstm_seq = nn.LSTM(
@@ -131,7 +130,7 @@ class ModelBiLSTM(nn.Module):
             self.relu_seq = nn.ReLU()
 
         # Signal BiLSTM
-        if self.module != "Seq_BiLSTM":
+        if self.model_type != "Seq_BiLSTM":
             self.lstm_signal = nn.LSTM(
                 input_size=self.signal_len,
                 hidden_size=self.nhid_signal,
@@ -173,7 +172,7 @@ class ModelBiLSTM(nn.Module):
 
     def forward(self, kmer, means, stds, signal_lens, signals):
         # Seq BiLSTM
-        if self.module != "Signal_BiLSTM":
+        if self.model_type != "Signal_BiLSTM":
             base_means = torch.reshape(means, (-1, self.signal_len)).float()
             base_stds = torch.reshape(stds, (-1, self.signal_len)).float()
             base_signal_lens = torch.reshape(signal_lens, (-1, self.signal_len)).float()
@@ -193,17 +192,17 @@ class ModelBiLSTM(nn.Module):
             out_seq = self.relu_seq(out_seq)
 
         # Signal BiLSTM
-        if self.module != "Seq_BiLSTM":
+        if self.model_type != "Seq_BiLSTM":
             out_signal = signals.float()
             out_signal, _ = self.lstm_signal(out_signal, self._init_hidden(out_signal.size(0), self.nhid_signal, self.num_layers2))
             out_signal = self.fc_signal(out_signal)
             out_signal = self.relu_signal(out_signal)
 
-        if self.module == "Both_BiLSTM":
+        if self.model_type == "Both_BiLSTM":
             out = torch.cat((out_seq, out_signal), dim=2)
-        elif self.module == "Seq_BiLSTM":
+        elif self.model_type == "Seq_BiLSTM":
             out = out_seq
-        elif self.module == "Signal_BiLSTM":
+        elif self.model_type == "Signal_BiLSTM":
             out = out_signal
 
         out, _ = self.lstm_combine(out, self._init_hidden(out.size(0), self.hidden_size, self.num_layers1))

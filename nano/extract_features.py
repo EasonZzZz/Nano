@@ -1,8 +1,9 @@
 """
 this file is used to extract features from the dataset.
 output: a csv file with the following columns:
-    read_id, chrom, pos, strand, k_mer,signal_mean, signal_std, signal_skew,
-    signal_kurt, signal_max, signal_min, signal_median, signal_length, methyl_label
+    read_id, chrom, pos, strand, kmer,
+    signal_mean, signal_std, signal_skew, signal_kurt,
+    signal_length, signals, methyl_label
 """
 import glob
 import os
@@ -28,6 +29,7 @@ GLOBAL_KEY = "UniqueGlobalKey"
 QUEUE_SIZE_BORDER = 1000
 SLEEP_TIME = 1
 logger = logging.get_logger("extract_features", level=logging.INFO)
+random.seed(42)
 
 
 def _rescale_signals(raw_signal, scaling, offset):
@@ -147,8 +149,11 @@ def _preprocess(fast5_dir, recursive, motifs, batch_size):
     return fast5s_queue, motif_seqs, len(fast5s)
 
 
-def _get_signal_rect(signals_list, signal_len=16):
-    signal_rect = []
+def _format_signal(signals_list, signal_len=16):
+    """
+    Turn the signals into a fixed length list.
+    """
+    signals = []
     for signal in signals_list:
         signal = list(np.around(signal, 6))
         if len(signal) < signal_len:
@@ -158,8 +163,8 @@ def _get_signal_rect(signals_list, signal_len=16):
             signal = [0] * pad0_left + signal + [0] * pad0_right
         elif len(signal) > signal_len:
             signal = [signal[i] for i in sorted(random.sample(range(len(signal)), signal_len))]
-        signal_rect.append(signal)
-    return signal_rect
+        signals.append(signal)
+    return signals
 
 
 def _extract_features(
@@ -207,35 +212,29 @@ def _extract_features(
                     if (positions is not None) and ("\t".join([chrom, str(pos_in_ref)]) not in positions):
                         continue
 
-                    k_mer = seq[mod_loc_in_read - num_bases: mod_loc_in_read + num_bases + 1]
-                    k_mer_signal = signal_list[mod_loc_in_read - num_bases: mod_loc_in_read + num_bases + 1]
-                    signal_lens = [len(x) for x in k_mer_signal]
+                    kmers = seq[mod_loc_in_read - num_bases: mod_loc_in_read + num_bases + 1]
+                    kmer_signals = signal_list[mod_loc_in_read - num_bases: mod_loc_in_read + num_bases + 1]
+                    signal_lens = [len(x) for x in kmer_signals]
 
                     # adding features
-                    signal_means = [np.mean(x) for x in k_mer_signal]
-                    signal_stds = [np.std(x) for x in k_mer_signal]
-                    signal_skews = [robust_skewness(x)[0] for x in k_mer_signal]
-                    signal_kurts = [robust_kurtosis(x)[0] for x in k_mer_signal]
-                    signal_max = [np.max(x) for x in k_mer_signal]
-                    signal_min = [np.min(x) for x in k_mer_signal]
-                    signal_median = [np.median(x) for x in k_mer_signal]
-                    k_mer_signal_rect = _get_signal_rect(k_mer_signal)
+                    signal_means = [np.mean(x) for x in kmer_signals]
+                    signal_stds = [np.std(x) for x in kmer_signals]
+                    signal_skews = [robust_skewness(x)[0] for x in kmer_signals]
+                    signal_kurts = [robust_kurtosis(x)[0] for x in kmer_signals]
+                    signals = _format_signal(kmer_signals)
 
                     feature = pd.DataFrame({
                         "read_id": info["read_id"],
                         "chrom": chrom,
                         "pos": pos,
                         "strand": strand,
-                        "kmer": k_mer,
+                        "kmer": kmers,
                         "signal_mean": signal_means,
                         "signal_std": signal_stds,
                         "signal_skew": signal_skews,
                         "signal_kurt": signal_kurts,
-                        "signal_max": signal_max,
-                        "signal_min": signal_min,
-                        "signal_median": signal_median,
                         "signal_length": signal_lens,
-                        "signal_rect": k_mer_signal_rect,
+                        "signals": signals,
                         "methyl_label": methyl_label
                     })
                     features = pd.concat([features, feature], axis=0)
