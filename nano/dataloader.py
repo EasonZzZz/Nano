@@ -1,7 +1,9 @@
 import glob
 import os
 
+import numpy as np
 import pandas as pd
+import torch
 
 from torch.utils.data import Dataset
 
@@ -14,19 +16,47 @@ class SignalFeatureData(Dataset):
     def __init__(self, data_dir, transform=None):
         self.data_dir = data_dir
         self.transform = transform
-        self.data = self.load_data()
+        self.info, self.data, self.label = self.load_data()
 
     def load_data(self):
         df = pd.DataFrame()
         for file in glob.glob(os.path.join(self.data_dir, "features_*.csv")):
             df = pd.concat([df, pd.read_csv(file)], axis=0)
-        df['kmer'] = df['kmer'].apply(lambda x: [base2code[base] for base in x])
-        return df
+
+        info = df[['read_id', 'chrom', 'pos', 'strand']]
+
+        data = df.drop(['read_id', 'chrom', 'pos', 'strand', 'methyl_label'], axis=1)
+        data['kmer'] = data['kmer'].apply(lambda x: np.array([base2code[base] for base in x]))
+        data['signals'] = data['signals'].apply(lambda x: x.replace('[', '').replace(']', '').split(', '))
+        data['signals'] = data['signals'].apply(lambda x: np.array(x).astype(float).reshape(-1, 16))
+        for col in data.columns:
+            if col == 'kmer' or col == 'signals':
+                continue
+            data[col] = data[col].apply(
+                lambda x: np.array(x[1:-1].split(',')).astype(float) if isinstance(x, str) else x
+            )
+
+        label = None
+        for col in df.columns:
+            if 'label' in col:
+                label = df[col]
+                break
+
+        return info, data, label
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
+        output = [i for i in self.data.iloc[idx].to_numpy()]
         if self.transform:
-            return self.transform(self.data.iloc[idx])
-        return self.data.iloc[idx]
+            return self.transform(output)
+        return output
+
+    def get_info(self, idx):
+        return self.info.iloc[idx]
+
+    def get_label(self, idx):
+        if self.label is None:
+            return None
+        return self.label.iloc[idx]

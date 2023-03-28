@@ -9,6 +9,7 @@ import glob
 import os
 import argparse
 import random
+import shutil
 import time
 import warnings
 
@@ -19,15 +20,13 @@ import multiprocessing as mp
 
 from statsmodels.robust import mad
 from statsmodels.stats.stattools import robust_kurtosis, robust_skewness
+
+from nano.utils.constant import QUEUE_BORDER_SIZE, SLEEP_TIME, GLOBAL_KEY, READS_GROUP
 from nano.utils.process_utils import get_fast5s, get_motif_seqs, get_ref_loc_of_methyl_site, Queue
 from nano.utils.ref_helper import DNAReference
 from nano.utils import logging
 
 warnings.filterwarnings("ignore")
-READS_GROUP = "Raw/Reads"
-GLOBAL_KEY = "UniqueGlobalKey"
-QUEUE_SIZE_BORDER = 1000
-SLEEP_TIME = 1
 logger = logging.get_logger("extract_features", level=logging.INFO)
 random.seed(42)
 
@@ -169,12 +168,12 @@ def _format_signal(signals_list, signal_len=16):
 
 def _extract_features(
         fast5s, error_queue, failed_align, corrected_group, basecall_subgroup, ref,
-        motif_seqs, mod_loc, kmers, methyl_label, positions
+        motif_seqs, mod_loc, kmer_len, methyl_label, positions
 ):
     """
     Extract features from fast5 files.
     """
-    num_bases = (kmers - 1) // 2
+    num_bases = (kmer_len - 1) // 2
 
     failed_counter, error_counter = 0, 0
     features = pd.DataFrame()
@@ -223,7 +222,7 @@ def _extract_features(
                     signal_kurts = [robust_kurtosis(x)[0] for x in kmer_signals]
                     signals = _format_signal(kmer_signals)
 
-                    feature = pd.DataFrame({
+                    feature_dict = {
                         "read_id": info["read_id"],
                         "chrom": chrom,
                         "pos": pos,
@@ -236,8 +235,8 @@ def _extract_features(
                         "signal_length": signal_lens,
                         "signals": signals,
                         "methyl_label": methyl_label
-                    })
-                    features = pd.concat([features, feature], axis=0)
+                    }
+                    features = features.append(feature_dict, ignore_index=True)
         except Exception:
             error_counter += 1
             logger.error("Error occurred when processing file: {}".format(fast5))
@@ -250,7 +249,7 @@ def _extract_features(
 
 def _extract_batch_features(
         fast5s_queue, features_queue, error_queue, failed_align, corrected_group, basecall_subgroup, ref,
-        motif_seqs, mod_loc, kmers, methyl_label, positions
+        motif_seqs, mod_loc, kmer_len, methyl_label, positions
 ):
     while True:
         fast5s = fast5s_queue.get()
@@ -259,10 +258,10 @@ def _extract_batch_features(
             break
         features_list = _extract_features(
             fast5s, error_queue, failed_align, corrected_group, basecall_subgroup, ref,
-            motif_seqs, mod_loc, kmers, methyl_label, positions
+            motif_seqs, mod_loc, kmer_len, methyl_label, positions
         )
         features_queue.put(features_list)
-        while features_queue.qsize() > QUEUE_SIZE_BORDER:
+        while features_queue.qsize() > QUEUE_BORDER_SIZE:
             time.sleep(SLEEP_TIME)
 
 
@@ -270,13 +269,7 @@ def _write_features(
         features_queue, output_dir, overwrite, output_batch_size
 ):
 
-    if os.path.exists(output_dir):
-        if overwrite:
-            files = glob.glob(os.path.join(output_dir, "*.csv"))
-            for f in files:
-                os.remove(f)
-        else:
-            raise RuntimeError("Output file already exists: {}".format(output_dir))
+
 
     df_buffer = pd.DataFrame()
     counter = 0
@@ -292,23 +285,26 @@ def _write_features(
             df_write = df_buffer.iloc[:output_batch_size]
             df_buffer = df_buffer.iloc[output_batch_size:]
             df_write.to_csv(output_path_file, index=False, header=True)
+            logger.info("Wrote features to {}.".format(output_path_file))
             counter += 1
     if len(df_buffer) > 0:
         output_path_file = os.path.join(output_dir, "features_{}.csv".format(counter))
         df_buffer.to_csv(output_path_file, index=False, header=True)
+        logger.info("Wrote features to {}.".format(output_path_file))
+    logger.info("Finished writing features to {}.".format(output_dir))
 
 
 def extract_features(
         fast5_dir, recursive, corrected_group, basecall_subgroup, ref_path,
-        motifs, mod_loc, kmers, methyl_label, positions_file,
+        motifs, mod_loc, kmer_len, methyl_label, positions_file,
         output_dir, overwrite, output_batch_size,
         processes, batch_size
 ):
     """
     Extract features from fast5 files.
     """
-    if kmers % 2 == 0:
-        raise ValueError("kmers must be odd.")
+    if kmer_len % 2 == 0:
+        raise ValueError("kmer_len must be odd.")
     ref = DNAReference(ref_path)
     if positions_file is not None:
         positions = pd.read_csv(positions_file, sep="\t", names=["chrom", "pos"], header=None)
@@ -317,8 +313,12 @@ def extract_features(
     else:
         positions = None
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    if os.path.exists(output_dir):
+        if overwrite:
+            shutil.rmtree(output_dir)
+        else:
+            raise RuntimeError("Output file already exists: {}".format(output_dir))
+    os.makedirs(output_dir)
     logging.init_logger(log_path=os.path.join(output_dir, "extract_features.log"))
 
     start = time.time()
@@ -341,7 +341,7 @@ def extract_features(
             target=_extract_batch_features,
             args=(
                 fast5s_queue, features_queue, error_queue, failed_align, corrected_group, basecall_subgroup, ref,
-                motif_seqs, mod_loc, kmers, methyl_label, positions
+                motif_seqs, mod_loc, kmer_len, methyl_label, positions
             )
         )
         p.daemon = True
@@ -418,8 +418,8 @@ def main():
         help="The location of the modified base in the motifs. "
     )
     ep_extraction.add_argument(
-        "--kmers", "-k", type=int, required=False, action="store", default=9,
-        help="The number of kmers to extract features for."
+        "--kmer_len", "-k", type=int, required=False, action="store", default=9,
+        help="The length of the kmer to extract features for."
     )
     ep_extraction.add_argument(
         "--methyl_label", "-ml", type=int, required=False, action="store", default=1, choices=[0, 1],
@@ -441,7 +441,7 @@ def main():
         help="Overwrite existing output files."
     )
     ep_output.add_argument(
-        "--output_batch_size", "-obs", type=int, required=False, action="store", default=1000,
+        "--output_batch_size", "-obs", type=int, required=False, action="store", default=100000,
         help="The number of features to write to disk in each batch."
     )
 
@@ -464,7 +464,7 @@ def main():
 
     motifs = args.motifs
     mod_loc_in_motif = args.mod_loc_in_motif
-    kmers = args.kmers
+    kmer_len = args.kmer_len
     methyl_label = args.methyl_label
     positions_file = args.positions
 
@@ -477,7 +477,7 @@ def main():
 
     extract_features(
         fast5_dir, recursive, corrected_group, basecall_subgroup, ref_path,
-        motifs, mod_loc_in_motif, kmers, methyl_label, positions_file,
+        motifs, mod_loc_in_motif, kmer_len, methyl_label, positions_file,
         output_dir, overwrite, output_batch_size,
         processes, batch_size
     )

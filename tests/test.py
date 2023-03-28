@@ -1,10 +1,12 @@
 import unittest
 
 import matplotlib.pyplot as plt
+import torch
+import torchvision
 
 from nano import extract_features
 from nano import dataloader
-
+from nano.models import ModelBiLSTM
 
 data_dir = "../data"
 output_dir = "../output"
@@ -31,10 +33,25 @@ class MyTestCase(unittest.TestCase):
         self.assertNotEqual(len(dataset), 0)
         print(len(dataset))
         print(dataset[0])
-        for i, data in enumerate(dataset):
-            print(data[0])
-            if i == 10:
-                break
+        print(dataset.get_info(0))
+
+    def test_model(self):
+        model = ModelBiLSTM()
+        model.cuda()
+        dataset = dataloader.SignalFeatureData(data_dir=output_dir)
+        self.assertNotEqual(len(dataset), 0)
+        train_loader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
+        for i, data in enumerate(train_loader):
+            data = [d.cuda() for d in data]
+            pred = model(data)
+            print(pred[0])
+            print(torch.argmax(pred[0]))
+            break
+
+    def test(self):
+        self.assertEqual(True, True)
+        print(torch.cuda.is_available())
+        print(torch.__version__)
 
 
 if __name__ == '__main__':

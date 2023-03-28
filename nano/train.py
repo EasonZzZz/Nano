@@ -13,7 +13,7 @@ from sklearn import metrics
 
 from nano.models import ModelBiLSTM
 from nano.utils import logging
-from nano.utils.torch_helper import USE_CUDA
+from nano.utils.constant import USE_CUDA
 from nano.dataloader import SignalFeatureData
 
 
@@ -53,8 +53,8 @@ def train(args):
         model_type=args.model_type,
         seq_len=args.seq_len,
         signal_len=args.signal_len,
-        num_layers1=args.num_layers1,
-        num_layers2=args.num_layers2,
+        num_combine_layers=args.num_combine_layers,
+        num_pre_layers=args.num_pre_layers,
         hidden_size=args.hidden_size,
         dropout=args.dropout,
         num_classes=args.num_classes,
@@ -100,7 +100,7 @@ def train(args):
             features = [f.cuda() for f in features] if USE_CUDA else features
 
             # forward pass
-            outputs, logits = model(features)
+            outputs = model(features)
             loss = criterion(outputs, features[-1])
             train_losses.append(loss.detach().item())
 
@@ -113,16 +113,16 @@ def train(args):
             if (i + 1) % args.log_step == 0 or (i + 1) == train_step:
                 model.eval()
                 with torch.no_grad():
-                    vaild_losses, valid_labels, valid_predicted = [], [], []
+                    valid_losses, valid_labels, valid_predicted = [], [], []
                     for vi, vfeatures in enumerate(valid_dataloader):
                         vfeatures = [f.cuda() for f in vfeatures] if USE_CUDA else vfeatures
                         voutputs, vlogits = model(vfeatures)
-                        vaild_losses.append(criterion(voutputs, vfeatures[-1]).detach().item())
+                        valid_losses.append(criterion(voutputs, vfeatures[-1]).detach().item())
                         valid_labels.extend(vfeatures[-1].tolist())
                         valid_predicted.extend(vlogits.argmax(dim=-1).tolist())
                     valid_accuracy = metrics.accuracy_score(valid_labels, valid_predicted)
-                    vaild_precision = metrics.precision_score(valid_labels, valid_predicted)
-                    vaild_recall = metrics.recall_score(valid_labels, valid_predicted)
+                    valid_precision = metrics.precision_score(valid_labels, valid_predicted)
+                    valid_recall = metrics.recall_score(valid_labels, valid_predicted)
                     if valid_accuracy > best_accuracy:
                         best_accuracy = valid_accuracy
                         curr_best_accuracy_epoch = epoch
@@ -146,10 +146,10 @@ def train(args):
                             i + 1,
                             train_step,
                             np.mean(train_losses),
-                            np.mean(vaild_losses),
+                            np.mean(valid_losses),
                             valid_accuracy,
-                            vaild_precision,
-                            vaild_recall,
+                            valid_precision,
+                            valid_recall,
                         )
                     )
                     train_losses = []
@@ -163,97 +163,103 @@ def train(args):
 
 def main():
     parser = argparse.ArgumentParser(description='train')
-    parser.add_argument("--train_file", type=str, required=True, help="train file")
-    parser.add_argument("--valid_file", type=str, required=True, help="valid file")
-    parser.add_argument("--model_dir", type=str, required=True, help="model dir")
+
+    # required arguments
+    required_group = parser.add_argument_group("required arguments")
+    required_group.add_argument("--train_file", type=str, required=True, help="train file")
+    required_group.add_argument("--valid_file", type=str, required=True, help="valid file")
+    required_group.add_argument("--model_dir", type=str, required=True, help="model dir")
 
     # model parameters
-    parser.add_argument(
+    model_group = parser.add_argument_group("model parameters")
+    model_group.add_argument(
         "--model_type", type=str, default="Both_BiLSTM", required=False,
         choices=["Both_BiLSTM", "Seq_BiLSTM", "Signal_BiLSTM"],
         help="type of model to use, default: Both_BiLSTM, choices: Both_BiLSTM, Seq_BiLSTM, Signal_BiLSTM")
-    parser.add_argument(
+    model_group.add_argument(
         "--seq_len", type=int, default=9, required=False,
         help="len of kmers, default: 9"
     )
-    parser.add_argument(
+    model_group.add_argument(
         "--signal_len", type=int, default=16, required=False,
         help="len of signal per base, default: 16"
     )
 
     # BiLSTM parameters
-    parser.add_argument(
-        "--num_layers1", type=int, default=3, required=False,
+    bilstm_group = parser.add_argument_group("BiLSTM parameters")
+    bilstm_group.add_argument(
+        "--num_combine_layers", type=int, default=3, required=False,
         help="num of lstm layer for combined seq and signal, default: 3"
     )
-    parser.add_argument(
-        "--num_layers2", type=int, default=1, required=False,
+    bilstm_group.add_argument(
+        "--num_pre_layers", type=int, default=1, required=False,
         help="num of lstm layer for signal (same for seq), default: 1"
     )
-    parser.add_argument(
+    bilstm_group.add_argument(
         "--num_classes", type=int, default=2, required=False,
         help="num of classes, default: 2"
     )
-    parser.add_argument(
+    bilstm_group.add_argument(
         "--dropout", type=float, default=0.5, required=False,
         help="dropout rate, default: 0.5"
     )
-    parser.add_argument(
+    bilstm_group.add_argument(
         "--hidden_size", type=int, default=256, required=False,
         help="hidden size of lstm, default: 256"
     )
-    parser.add_argument(
+    bilstm_group.add_argument(
         "--vocab_size", type=int, default=16, required=False,
         help="vocab size of kmers, default: 16"
     )
-    parser.add_argument(
+    bilstm_group.add_argument(
         "--embedding_size", type=int, default=4, required=False,
         help="embedding size of kmers, default: 4"
     )
-    parser.add_argument(
+    bilstm_group.add_argument(
         "--using_base", type=bool, default=True, required=False,
         help="using base or not, default: True"
     )
-    parser.add_argument(
+    bilstm_group.add_argument(
         "--using_signal_len", type=bool, default=True, required=False,
         help="using signal length or not, default: True"
     )
 
     # training parameters
-    parser.add_argument(
+    training_group = parser.add_argument_group("training parameters")
+    training_group.add_argument(
         "--optimizer", type=str, default="Adam", required=False,
         choices=["Adam", "SGD"],
         help="optimizer to use, default: Adam, choices: Adam, SGD"
     )
-    parser.add_argument(
+    training_group.add_argument(
         "--lr", type=float, default=0.001, required=False,
         help="learning rate, default: 0.001"
     )
-    parser.add_argument(
+    training_group.add_argument(
         "--batch_size", type=int, default=512, required=False,
         help="batch size, default: 512"
     )
-    parser.add_argument(
+    training_group.add_argument(
         "--num_epochs", type=int, default=10, required=False,
         help="num of epochs, default: 10"
     )
-    parser.add_argument(
+    training_group.add_argument(
         "--pos_weight", type=float, default=1.0, required=False,
         help="pos weight, default: 1.0"
     )
-    parser.add_argument(
+    training_group.add_argument(
         "--seed", type=int, default=42, required=False,
         help="random seed, default: 42"
     )
-    parser.add_argument(
+    training_group.add_argument(
         "--log_interval", type=int, default=100, required=False,
         help="log interval, default: 100"
     )
-    parser.add_argument(
+    training_group.add_argument(
         "--pretrained_model", type=str, default=None, required=False,
         help="pretrained model, default: None"
     )
-    parser.add_argument(
+    training_group.add_argument(
         "--tmp_dir", type=str, default="./tmp", required=False,
         help="tmp dir, default: ./tmp"
     )

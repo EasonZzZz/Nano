@@ -57,6 +57,12 @@ def init_logger(
             base_fn, fn_ext = os.path.splitext(log_path)
             log_path = base_fn + "." + out_suffix + fn_ext
     if log_path is not None:
+        if os.path.exists(log_path):
+            os.remove(log_path)
+        else:
+            log_dir = os.path.dirname(log_path)
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
         log_fp = logging.FileHandler(log_path, "w")
         log_fp.setLevel(logging.DEBUG)
         log_fp.setFormatter(MyFormatter())
