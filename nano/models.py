@@ -124,7 +124,7 @@ class ModelBiLSTM(nn.Module):
             kurts = torch.reshape(kurts, (-1, self.seq_len, 1)).float()
             signal_lens = torch.reshape(signal_lens, (-1, self.seq_len, 1)).float()
 
-            # out_seq size: (batch_size, seq_len, feature_num)
+            # (batch_size, seq_len, feature_num)
             if self.using_signal_len:
                 kmer_embed = self.embedding(kmer.long())
                 if self.using_signal_len:
@@ -136,6 +136,7 @@ class ModelBiLSTM(nn.Module):
                     out_seq = torch.cat((means, stds, skews, kurts, signal_lens), dim=2)
                 else:
                     out_seq = torch.cat((means, stds, skews, kurts), dim=2)
+            # (batch_size, seq_len, hidden_size)
             out_seq, _ = self.lstm_seq(out_seq, self._init_hidden(out_seq.size(0), self.hidden_seq,
                                                                   self.num_combine_layers))
             out_seq = self.fc_seq(out_seq)
@@ -144,6 +145,7 @@ class ModelBiLSTM(nn.Module):
         # Signal BiLSTM
         if self.model_type != "Seq_BiLSTM":
             out_signal = signals.float()
+            # (batch_size, signal_len, hidden_size)
             out_signal, _ = self.lstm_signal(out_signal, self._init_hidden(out_signal.size(0), self.hidden_signal,
                                                                            self.num_pre_layers))
             out_signal = self.fc_signal(out_signal)

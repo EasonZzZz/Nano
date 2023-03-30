@@ -1,17 +1,17 @@
-import glob
 import os
 import shutil
-import sys
 import time
 import argparse
 import uuid
+import torch
 
 import numpy as np
-import pandas as pd
-import torch
 import torch.multiprocessing as mp
-from torch.multiprocessing.queue import Queue
 
+from torch.multiprocessing import Queue
+from torch.utils.data import DataLoader
+
+from nano.dataloader import SignalFeatureData
 from nano.extract_features import extract_features
 from nano.models import ModelBiLSTM
 from nano.utils import logging
@@ -21,35 +21,46 @@ try:
     mp.set_start_method('spawn')
 except RuntimeError:
     pass
-
 os.environ['MKL_THREADING_LAYER'] = 'GNU'
 logger = logging.get_logger(__name__, level=logging.INFO)
 
 
-def _divide_batches(features, batch_size):
+def _divide_batches(features_loader):
+    # todo: put too large text into queue, then the proc will hang, need to fix
     queue = Queue()
-    for i in range(0, len(features), batch_size):
-        queue.put(features[i:i + batch_size])
+    for i, data in enumerate(features_loader):
+        info, features, labels = data
+        queue.put([info, features])
     queue.put(None)
     return queue
 
 
 def _call_modifications(model, features_batch, batch_size, device):
-    for i in np.arange(0, features_batch.shape[0], batch_size):
-        features = features_batch[i:i + batch_size]
-        info = features[:, :4]
-        features = features[:, 4:]
-        features = torch.from_numpy(features).float()
+    predicts = None
+    for i in range(0, len(features_batch), batch_size):
+        batch = features_batch[i:i + batch_size]
+        info, features = batch
         if USE_CUDA:
-            features = features.cuda(device)
+            features = [f.cuda(device) for f in features]
         with torch.no_grad():
-            pred = model(features)
+            logit = model(features)
+            pred = torch.argmax(logit, dim=1)
+        if USE_CUDA:
+            logit = logit.cpu()
+            pred = pred.cpu()
+        info = np.array(info).reshape(-1, 1)
+        logit = logit.data.numpy().reshape(-1, model.num_classes)
+        pred = pred.numpy().reshape(-1, 1)
+        pred = np.concatenate([info, logit, pred], axis=1)
+        if predicts is None:
+            predicts = pred
+        else:
+            predicts = np.concatenate([predicts, pred], axis=0)
+    print(predicts.shape)
+    return predicts
 
-        pred = pred.cpu().numpy()
-        yield pred
 
-
-def _call_modifications_gpu_worker(features_batch_q, pred_q, model_path, args, device=0):
+def _call_modifications_gpu_worker(features_batch_q, predict_q, model_path, args, device=0):
     logger.info("Start calling modifications worker-{}".format(os.getpid()))
     start_time = time.time()
     model = ModelBiLSTM(
@@ -66,25 +77,26 @@ def _call_modifications_gpu_worker(features_batch_q, pred_q, model_path, args, d
         using_base=args.using_base,
         using_signal_len=args.using_signal_len,
     )
-    model.load_state_dict(torch.load(model_path, map_location="cuda:{}".format(device)))
+    # model.load_state_dict(torch.load(model_path, map_location="cuda:{}".format(device)))
     if USE_CUDA:
         model = model.cuda(device)
     model.eval()
 
     batch_num_total = 0
     while True:
-        if features_batch_q.empty():
-            time.sleep(SLEEP_TIME)
-            continue
+        # if features_batch_q.empty():
+        #     time.sleep(SLEEP_TIME)
+        #     continue
         features_batch = features_batch_q.get()
         if features_batch is None:
             features_batch_q.put(None)
             break
         pred = _call_modifications(model, features_batch, args.batch_size, device)
-        pred_q.put(pred)
-        while pred_q.size() > QUEUE_BORDER_SIZE:
-            time.sleep(SLEEP_TIME)
-        batch_num_total += features_batch.shape[0] // args.batch_size + 1
+        predict_q.put(pred)
+        # while predict_q.qsize() > QUEUE_BORDER_SIZE:
+        #     time.sleep(SLEEP_TIME)
+        batch_num_total += len(features_batch) // args.batch_size + 1
+        print(batch_num_total)
     logger.info("Calling modifications worker-{} processed {} batches in {:.2f} s".format(
         os.getpid(), batch_num_total, time.time() - start_time))
 
@@ -93,30 +105,23 @@ def _write_modifications(pred_q, output_dir, success_file):
     pass
 
 
-def _call_modifications_gpu(features, model_path, success_file, args):
-    if len(features) == 0:
-        logger.error("No features extracted")
-        return
-    features_batch_q = _divide_batches(features, args.f5_batch_size * 1000)
-    pred_q = Queue()
+def _call_modifications_gpu(features_dataset, model_path, success_file, args):
+    features_loader = DataLoader(features_dataset, batch_size=args.f5_batch_size * 1000, shuffle=False)
+    features_batch_q = _divide_batches(features_loader)
+    predict_q = Queue()
 
-    processes = []
+    procs = []
     for i in range(args.processes):
-        p = mp.Process(target=_call_modifications_gpu_worker, args=(features_batch_q, pred_q, model_path, args))
-        p.daemon = True
+        p = mp.Process(target=_call_modifications_gpu_worker, args=(features_batch_q, predict_q, model_path, args))
         p.start()
-        processes.append(p)
+        procs.append(p)
+    p_w = mp.Process(target=_write_modifications, args=(predict_q, args.output, success_file))
+    p_w.start()
 
-    w_p = mp.Process(target=_write_modifications, args=(pred_q, args.output, success_file))
-    w_p.daemon = True
-    w_p.start()
-
-    for p in processes:
+    for p in procs:
         p.join()
-    pred_q.put(None)
-    w_p.join()
-
-    logger.info("Finish calling modifications")
+    predict_q.put(None)
+    p_w.join()
 
 
 def _call_modifications_cpu(features, model_path, success_file, args):
@@ -142,9 +147,8 @@ def call_modifications(args):
         else:
             raise FileExistsError("Output directory {} already exists".format(args.output))
     os.makedirs(args.output)
-    logging.init_logger(log_path=os.path.join(args.output, "log.txt"))
+    logging.init_logger(log_file=os.path.join(args.output, "log.txt"))
 
-    features = pd.DataFrame()
     if args.input_type == 0:
         logger.info("Extracting features from {}".format(input_path))
         extract_features(
@@ -164,23 +168,17 @@ def call_modifications(args):
             processes=args.processes,
             batch_size=args.f5_batch_size,
         )
-        for file in glob.glob(os.path.join(args.output, "features", "features_*.csv"), recursive=True):
-            features = pd.concat([features, pd.read_csv(file)])
+        features_dataset = SignalFeatureData(os.path.join(args.output, "features"))
     else:
         logger.info("Loading features from {}".format(input_path))
-        for file in glob.glob(os.path.join(input_path, "features_*.csv"), recursive=True):
-            features = pd.concat([features, pd.read_csv(file)])
-            logger.info("Found features file: {}".format(file))
-    if len(features) == 0:
-        logger.error("No features found, please check the input file")
-        sys.exit(1)
-    if "methyl_label" in features.columns:
-        features = features.drop(columns=["methyl_label"])
-    print(features.head(10))
+        features_dataset = SignalFeatureData(input_path)
+    if len(features_dataset) == 0:
+        logger.error("No features extracted")
+        return
     if USE_CUDA:
-        _call_modifications_gpu(features, model_path, success_file, args)
+        _call_modifications_gpu(features_dataset, model_path, success_file, args)
     else:
-        _call_modifications_cpu(features, model_path, success_file, args)
+        _call_modifications_cpu(features_dataset, model_path, success_file, args)
 
     logger.info("Finish calling modifications, time used: {:.2f} seconds".format(time.time() - start_time))
 

@@ -17,7 +17,7 @@ from nano.utils.constant import USE_CUDA
 from nano.dataloader import SignalFeatureData
 
 
-logger = logging.get_logger("extract_features", level=logging.INFO)
+logger = logging.get_logger(__name__)
 
 
 def train(args):
@@ -96,13 +96,17 @@ def train(args):
         curr_best_accuracy_epoch = 0
         no_best_model = True
         train_losses = []
-        for i, features in enumerate(train_dataloader):
-            features = [f.cuda() for f in features] if USE_CUDA else features
+        for i, data in enumerate(train_dataloader):
+            info, features, labels = data
+            if USE_CUDA:
+                features = [f.cuda() for f in features]
+                labels = torch.LongTensor(labels).cuda()
 
             # forward pass
             outputs = model(features)
-            loss = criterion(outputs, features[-1])
+            loss = criterion(outputs, labels)
             train_losses.append(loss.detach().item())
+            print("Epoch: {}, Step: {}, Loss: {}".format(epoch, i, loss.detach().item()))
 
             # backward pass
             optimizer.zero_grad()
@@ -110,16 +114,23 @@ def train(args):
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
             optimizer.step()
 
-            if (i + 1) % args.log_step == 0 or (i + 1) == train_step:
+            if (i + 1) % args.log_interval == 0 or (i + 1) == train_step:
                 model.eval()
                 with torch.no_grad():
                     valid_losses, valid_labels, valid_predicted = [], [], []
                     for vi, vfeatures in enumerate(valid_dataloader):
-                        vfeatures = [f.cuda() for f in vfeatures] if USE_CUDA else vfeatures
-                        voutputs, vlogits = model(vfeatures)
-                        valid_losses.append(criterion(voutputs, vfeatures[-1]).detach().item())
-                        valid_labels.extend(vfeatures[-1].tolist())
-                        valid_predicted.extend(vlogits.argmax(dim=-1).tolist())
+                        _, vfeatures, vlabels = vfeatures
+                        if USE_CUDA:
+                            vfeatures = [f.cuda() for f in vfeatures]
+                            vlabels = torch.LongTensor(vlabels).cuda()
+                        voutputs = model(vfeatures)
+                        vloss = criterion(voutputs, vlabels)
+                        valid_losses.append(vloss.detach().item())
+                        if USE_CUDA:
+                            vlabels = vlabels.cpu()
+                            voutputs = voutputs.cpu()
+                        valid_labels.extend(vlabels.numpy())
+                        valid_predicted.extend(voutputs.argmax(dim=1).numpy())
                     valid_accuracy = metrics.accuracy_score(valid_labels, valid_predicted)
                     valid_precision = metrics.precision_score(valid_labels, valid_predicted)
                     valid_recall = metrics.recall_score(valid_labels, valid_predicted)
@@ -265,6 +276,7 @@ def main():
     )
 
     args = parser.parse_args()
+    logging.init_logger(log_file=os.path.join(args.model_dir, "train.log"))
     logger.info("training parameters: {}".format(args))
     logger.info("training start...")
     start = time.time()

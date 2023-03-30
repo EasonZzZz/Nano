@@ -24,7 +24,6 @@ class MyFormatter(logging.Formatter):
 
     def format(self, record):
         format_orig = self._fmt
-
         # Replace the original format with one customized by logging level
         if record.levelno == logging.DEBUG:
             self._style._fmt = self.dbg_fmt
@@ -35,15 +34,11 @@ class MyFormatter(logging.Formatter):
         elif record.levelno == logging.ERROR:
             self._style._fmt = self.err_fmt
         result = logging.Formatter.format(self, record)
-
         self._fmt = format_orig
-
         return result
 
 
-def init_logger(
-    out_dir=None, out_suffix=None, log_path=None, quiet=False, silent=False
-):
+def init_logger(log_file=None, quiet=False, silent=False):
     """Prepare logging output. Output file will be opened if out_dir or log_fn
     are specified. out_suffix will be added to the standard log.txt filename in
     out_dir (does not apply when log_fn is specified).
@@ -51,19 +46,14 @@ def init_logger(
     and above. If quiet=True, stderr will include warning and above only.
     """
     log_fp = None
-    if out_dir is not None:
-        log_path = os.path.join(out_dir, LOG_FILENAME)
-        if out_suffix is not None:
-            base_fn, fn_ext = os.path.splitext(log_path)
-            log_path = base_fn + "." + out_suffix + fn_ext
-    if log_path is not None:
-        if os.path.exists(log_path):
-            os.remove(log_path)
+    if log_file is not None:
+        if os.path.exists(log_file):
+            os.remove(log_file)
         else:
-            log_dir = os.path.dirname(log_path)
+            log_dir = os.path.dirname(log_file)
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir)
-        log_fp = logging.FileHandler(log_path, "w")
+        log_fp = logging.FileHandler(log_file, "w")
         log_fp.setLevel(logging.DEBUG)
         log_fp.setFormatter(MyFormatter())
 

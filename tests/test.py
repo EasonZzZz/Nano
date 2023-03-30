@@ -1,15 +1,16 @@
 import unittest
 
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
-import torchvision
 
 from nano import extract_features
 from nano import dataloader
 from nano.models import ModelBiLSTM
+from nano.utils.constant import USE_CUDA
 
 data_dir = "../data"
-output_dir = "../output"
+output_dir = "../output/features"
 
 
 class MyTestCase(unittest.TestCase):
@@ -37,21 +38,25 @@ class MyTestCase(unittest.TestCase):
 
     def test_model(self):
         model = ModelBiLSTM()
-        model.cuda()
+        if USE_CUDA:
+            model.cuda()
         dataset = dataloader.SignalFeatureData(data_dir=output_dir)
         self.assertNotEqual(len(dataset), 0)
-        train_loader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
+        train_loader = torch.utils.data.DataLoader(dataset, batch_size=2, shuffle=True)
         for i, data in enumerate(train_loader):
-            data = [d.cuda() for d in data]
-            pred = model(data)
+            info, features, labels = data
+            if USE_CUDA:
+                features = [f.cuda() for f in features]
+                labels = labels.cuda()
+            pred = model(features)
             print(pred[0])
             print(torch.argmax(pred[0]))
             break
 
     def test(self):
         self.assertEqual(True, True)
-        print(torch.cuda.is_available())
-        print(torch.__version__)
+        from statsmodels.stats.stattools import robust_kurtosis, robust_skewness
+        print(robust_skewness([1])[0] == np.nan)
 
 
 if __name__ == '__main__':

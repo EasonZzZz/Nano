@@ -22,8 +22,12 @@ class SignalFeatureData(Dataset):
         df = pd.DataFrame()
         for file in glob.glob(os.path.join(self.data_dir, "features_*.csv")):
             df = pd.concat([df, pd.read_csv(file)], axis=0)
-
-        info = df[['read_id', 'chrom', 'pos', 'strand']]
+        if len(df) == 0:
+            raise ValueError("No data found in {}".format(self.data_dir))
+        info = []
+        for i, row in df[['read_id', 'chrom', 'pos', 'strand']].iterrows():
+            info.append("\t".join([str(i) for i in row.to_numpy()]))
+        info = np.array(info)
 
         data = df.drop(['read_id', 'chrom', 'pos', 'strand', 'methyl_label'], axis=1)
         data['kmer'] = data['kmer'].apply(lambda x: np.array([base2code[base] for base in x]))
@@ -39,7 +43,7 @@ class SignalFeatureData(Dataset):
         label = None
         for col in df.columns:
             if 'label' in col:
-                label = df[col]
+                label = df[col].to_numpy(dtype=np.int64)
                 break
 
         return info, data, label
@@ -51,12 +55,4 @@ class SignalFeatureData(Dataset):
         output = [i for i in self.data.iloc[idx].to_numpy()]
         if self.transform:
             return self.transform(output)
-        return output
-
-    def get_info(self, idx):
-        return self.info.iloc[idx]
-
-    def get_label(self, idx):
-        if self.label is None:
-            return None
-        return self.label.iloc[idx]
+        return self.info[idx], output, self.label[idx]

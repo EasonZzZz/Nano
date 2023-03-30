@@ -27,7 +27,7 @@ from nano.utils.ref_helper import DNAReference
 from nano.utils import logging
 
 warnings.filterwarnings("ignore")
-logger = logging.get_logger("extract_features", level=logging.INFO)
+logger = logging.get_logger(__name__)
 random.seed(42)
 
 
@@ -218,8 +218,8 @@ def _extract_features(
                     # adding features
                     signal_means = [np.mean(x) for x in kmer_signals]
                     signal_stds = [np.std(x) for x in kmer_signals]
-                    signal_skews = [robust_skewness(x)[0] for x in kmer_signals]
-                    signal_kurts = [robust_kurtosis(x)[0] for x in kmer_signals]
+                    signal_skews = [robust_skewness(x)[0] if len(x) > 1 else 0 for x in kmer_signals]
+                    signal_kurts = [robust_kurtosis(x)[0] if len(x) > 1 else 0 for x in kmer_signals]
                     signals = _format_signal(kmer_signals)
 
                     feature_dict = {
@@ -319,7 +319,7 @@ def extract_features(
         else:
             raise RuntimeError("Output file already exists: {}".format(output_dir))
     os.makedirs(output_dir)
-    logging.init_logger(log_path=os.path.join(output_dir, "extract_features.log"))
+    # logging.init_logger(log_file=os.path.join(output_dir, "extract_features.log"))
 
     start = time.time()
     fast5s_queue, motif_seqs, num_fast5s = _preprocess(
