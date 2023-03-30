@@ -199,12 +199,12 @@ def main():
     # BiLSTM parameters
     bilstm_group = parser.add_argument_group("BiLSTM parameters")
     bilstm_group.add_argument(
-        "--num_combine_layers", type=int, default=3, required=False,
-        help="num of lstm layer for combined seq and signal, default: 3"
+        "--num_combine_layers", type=int, default=2, required=False,
+        help="num of lstm layer for combined seq and signal, default: 2"
     )
     bilstm_group.add_argument(
-        "--num_pre_layers", type=int, default=1, required=False,
-        help="num of lstm layer for signal (same for seq), default: 1"
+        "--num_pre_layers", type=int, default=2, required=False,
+        help="num of lstm layer for signal (same for seq), default: 2"
     )
     bilstm_group.add_argument(
         "--num_classes", type=int, default=2, required=False,

@@ -222,12 +222,12 @@ def main():
         help="The length of the signal per base in kmer"
     )
     model_group.add_argument(
-        '--num_combine_layers', type=int, required=False, default=2,
-        help="The number of layers in the combine BiLSTM"
+        "--num_combine_layers", type=int, default=2, required=False,
+        help="num of lstm layer for combined seq and signal, default: 2"
     )
     model_group.add_argument(
-        '--num_pre_layers', type=int, required=False, default=1,
-        help="The number of layers in the pre BiLSTM"
+        "--num_pre_layers", type=int, default=2, required=False,
+        help="num of lstm layer for signal (same for seq), default: 2"
     )
     model_group.add_argument(
         '--num_classes', type=int, required=False, default=2,
