@@ -12,9 +12,12 @@
 # 4. vbz_compression: https://github.com/nanoporetech/vbz_compression
 # 5. minimap2: https://github.com/lh3/minimap2
 
+eval "$(conda shell.bash hook)"
+conda activate nano_dev
+
 case $# in
-  2) ;;
-  *) echo "Usage: $0 <base_dir> <ref_fasta>" >&2
+  4) ;;
+  *) echo "Usage: $0 <base_dir> <ref_fasta> <output_dir> <processes>" >&2
      exit 1 ;;
 esac
 
@@ -29,10 +32,26 @@ case "$2" in
      exit 1 ;;
 esac
 
+if [ ! -d "$3" ]; then
+  rm -rf "$3"
+  mkdir "$3"
+fi
+
+if [ "$4" -lt 1 ]; then
+  echo "Error: $4 is not a positive integer" >&2
+  exit 1
+fi
+
 # base_dir: The base directory of the data.
 base_dir=$1
 # ref_fasta: The reference genome in fasta format.
 ref_fasta=$2
+# output_dir: The output directory.
+output_dir=$3
+# procs: The number of threads.
+procs=$4
+
+
 
 # The pipeline is divided into 3 parts:
 # 1. Multi-to-single: The multi-data files are converted to single-data files using the ont_fast5_api.
@@ -42,29 +61,29 @@ echo "################################"
 echo "######## Multi-to-single #######"
 multi_to_single_fast5 \
  --input_path "$base_dir" \
- --save_path "$base_dir"/single \
- --recursive --threads 12
+ --save_path "$output_dir"/single \
+ --recursive --threads "$procs"
 
 # 2. Basecalling: The multi-data files are basecalled using the Guppy basecaller.
 echo "########## Basecalling ##########"
 guppy_basecaller \
-  --input_path "$base_dir"/single \
-  --save_path "$base_dir"/guppy \
+  --input_path "$output_dir"/single \
+  --save_path "$output_dir"/guppy \
   --config dna_r9.4.1_450bps_hac.cfg \
   --device cuda:0 --recursive
-cat "$base_dir"/guppy/*/*.fastq > "$base_dir"/guppy/all.fastq
+cat "$output_dir"/guppy/*/*.fastq > "$output_dir"/guppy/all.fastq
 
 # 3. Annotate and resquiggle: The single-data files are annotated and re-squiggled using the Tombo.
 echo "########## Annotate ##########"
 tombo preprocess annotate_raw_with_fastqs \
-  --fast5-basedir "$base_dir"/single \
-  --fastq-filenames "$base_dir"/guppy/all.fastq \
-  --sequencing-summary-filenames "$base_dir"/guppy/sequencing_summary.txt \
-  --overwrite --processes 12
+  --fast5-basedir "$output_dir"/single \
+  --fastq-filenames "$output_dir"/guppy/all.fastq \
+  --sequencing-summary-filenames "$output_dir"/guppy/sequencing_summary.txt \
+  --overwrite --processes "$procs"
 
 echo "########## Resquiggle ##########"
 tombo resquiggle \
-  "$base_dir"/single \
+  "$output_dir"/single \
   "$ref_fasta" \
-  --processes 12 \
+  --processes "$procs" \
   --overwrite

@@ -97,7 +97,7 @@ def train(args):
         no_best_model = True
         train_losses = []
         for i, data in enumerate(train_dataloader):
-            info, features, labels = data
+            _, features, labels = data
             if USE_CUDA:
                 features = [f.cuda() for f in features]
                 labels = torch.LongTensor(labels).cuda()
@@ -123,6 +123,7 @@ def train(args):
                         if USE_CUDA:
                             vfeatures = [f.cuda() for f in vfeatures]
                             vlabels = torch.LongTensor(vlabels).cuda()
+
                         voutputs = model(vfeatures)
                         vloss = criterion(voutputs, vlabels)
                         valid_losses.append(vloss.detach().item())
