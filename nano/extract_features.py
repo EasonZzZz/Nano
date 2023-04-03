@@ -50,7 +50,7 @@ def get_raw_signal(fast5_file, corrected_group, basecall_subgroup):
     try:
         align_status = fast5_data["Analyses"][corrected_group][basecall_subgroup].attrs["status"]
     except KeyError:
-        logger.error("Could not find status under Analyses/{}/{}/"
+        logger.debug("Could not find status under Analyses/{}/{}/"
                      " in data file: {}".format(corrected_group, basecall_subgroup, fast5_file))
         align_status = None
 
@@ -266,11 +266,8 @@ def _extract_batch_features(
 
 
 def _write_features(
-        features_queue, output_dir, overwrite, output_batch_size
+        features_queue, output_dir, output_batch_size
 ):
-
-
-
     df_buffer = pd.DataFrame()
     counter = 0
     while True:
@@ -352,7 +349,7 @@ def extract_features(
     p_write = mp.Process(
         target=_write_features,
         args=(
-            features_queue, output_dir, overwrite, output_batch_size
+            features_queue, output_dir, output_batch_size
         )
     )
     p_write.daemon = True

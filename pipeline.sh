@@ -49,9 +49,7 @@ ref_fasta=$2
 # output_dir: The output directory.
 output_dir=$3
 # procs: The number of threads.
-procs=$4
-
-
+procs=$4  
 
 # The pipeline is divided into 3 parts:
 # 1. Multi-to-single: The multi-data files are converted to single-data files using the ont_fast5_api.

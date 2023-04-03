@@ -9,8 +9,8 @@ from nano import dataloader
 from nano.models import ModelBiLSTM
 from nano.utils.constant import USE_CUDA
 
-data_dir = "../data"
-output_dir = "../output/features"
+data_dir = "../test_data/data"
+output_dir = "../test_data/output/features"
 
 
 class MyTestCase(unittest.TestCase):
