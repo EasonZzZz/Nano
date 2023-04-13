@@ -419,7 +419,7 @@ def main():
         help="The length of the kmer to extract features for."
     )
     ep_extraction.add_argument(
-        "--methyl_label", "-ml", type=int, required=False, action="store", default=1, choices=[0, 1],
+        "--methyl_label", "-ml", type=int, required=False, action="store", default=0, choices=[0, 1],
         help="The label for the methylated state. This is for training purposes only."
     )
     ep_extraction.add_argument(

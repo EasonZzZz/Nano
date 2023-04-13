@@ -1,0 +1,100 @@
+[13:35:26] training parameters: Namespace(train_file='/home/eason/ont/data/0318_seq/train_features_over.csv', valid_file='/home/eason/ont/data/0318_seq/test_features_over.csv', model_dir='/home/eason/ont/data/0318_seq/model_000001_over', model_type='Both_BiLSTM', seq_len=9, signal_len=16, num_combine_layers=2, num_pre_layers=2, num_classes=2, dropout=0.5, hidden_size=256, vocab_size=16, embedding_size=4, using_base=True, using_signal_len=True, optimizer='Adam', lr=1e-06, batch_size=512, num_epochs=10, pos_weight=1.0, seed=42, log_interval=100, pretrained_model=None, tmp_dir='./tmp')
+[13:35:26] training start...
+[13:35:26] Using GPU
+[13:35:26] Loading data
+[13:38:55] Loading model
+[13:39:06] Training model
+[13:39:06] Using optimizer: Adam
+[13:39:06] Start training
+[13:39:06] Train step: 2144
+[13:39:40] Epoch [1/10], Step [100/2144], Train Loss: 0.6934, Valid Loss: 0.6933, Valid Accuracy: 0.4848, Valid Precision: 0.4844, Valid Recall: 0.9913
+[13:40:12] Epoch [1/10], Step [200/2144], Train Loss: 0.6933, Valid Loss: 0.6933, Valid Accuracy: 0.4846, Valid Precision: 0.4842, Valid Recall: 0.9866
+[13:40:45] Epoch [1/10], Step [300/2144], Train Loss: 0.6933, Valid Loss: 0.6933, Valid Accuracy: 0.4851, Valid Precision: 0.4844, Valid Recall: 0.9790
+[13:41:17] Epoch [1/10], Step [400/2144], Train Loss: 0.6934, Valid Loss: 0.6933, Valid Accuracy: 0.4854, Valid Precision: 0.4843, Valid Recall: 0.9672
+[13:41:50] Epoch [1/10], Step [500/2144], Train Loss: 0.6933, Valid Loss: 0.6933, Valid Accuracy: 0.4861, Valid Precision: 0.4845, Valid Recall: 0.9567
+[13:42:22] Epoch [1/10], Step [600/2144], Train Loss: 0.6933, Valid Loss: 0.6933, Valid Accuracy: 0.4873, Valid Precision: 0.4849, Valid Recall: 0.9409
+[13:42:54] Epoch [1/10], Step [700/2144], Train Loss: 0.6933, Valid Loss: 0.6933, Valid Accuracy: 0.4869, Valid Precision: 0.4843, Valid Recall: 0.9196
+[13:43:26] Epoch [1/10], Step [800/2144], Train Loss: 0.6933, Valid Loss: 0.6933, Valid Accuracy: 0.4884, Valid Precision: 0.4847, Valid Recall: 0.8907
+[13:43:59] Epoch [1/10], Step [900/2144], Train Loss: 0.6933, Valid Loss: 0.6932, Valid Accuracy: 0.4902, Valid Precision: 0.4851, Valid Recall: 0.8561
+[13:44:31] Epoch [1/10], Step [1000/2144], Train Loss: 0.6933, Valid Loss: 0.6932, Valid Accuracy: 0.4894, Valid Precision: 0.4839, Valid Recall: 0.8140
+[13:45:03] Epoch [1/10], Step [1100/2144], Train Loss: 0.6933, Valid Loss: 0.6932, Valid Accuracy: 0.4930, Valid Precision: 0.4851, Valid Recall: 0.7636
+[13:45:36] Epoch [1/10], Step [1200/2144], Train Loss: 0.6933, Valid Loss: 0.6932, Valid Accuracy: 0.4940, Valid Precision: 0.4848, Valid Recall: 0.7117
+[13:46:08] Epoch [1/10], Step [1300/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.4955, Valid Precision: 0.4852, Valid Recall: 0.6825
+[13:46:40] Epoch [1/10], Step [1400/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.4954, Valid Precision: 0.4839, Valid Recall: 0.6303
+[13:47:13] Epoch [1/10], Step [1500/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.4974, Valid Precision: 0.4845, Valid Recall: 0.5876
+[13:47:45] Epoch [1/10], Step [1600/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.4990, Valid Precision: 0.4847, Valid Recall: 0.5455
+[13:48:18] Epoch [1/10], Step [1700/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5002, Valid Precision: 0.4847, Valid Recall: 0.5074
+[13:48:50] Epoch [1/10], Step [1800/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5006, Valid Precision: 0.4840, Valid Recall: 0.4695
+[13:49:22] Epoch [1/10], Step [1900/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5027, Valid Precision: 0.4846, Valid Recall: 0.4209
+[13:49:55] Epoch [1/10], Step [2000/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5049, Valid Precision: 0.4862, Valid Recall: 0.3943
+[13:50:27] Epoch [1/10], Step [2100/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5045, Valid Precision: 0.4843, Valid Recall: 0.3562
+[13:50:56] Epoch [1/10], Step [2144/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5051, Valid Precision: 0.4846, Valid Recall: 0.3434
+[13:51:28] Epoch [2/10], Step [100/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5063, Valid Precision: 0.4849, Valid Recall: 0.3100
+[13:52:01] Epoch [2/10], Step [200/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5071, Valid Precision: 0.4845, Valid Recall: 0.2775
+[13:52:33] Epoch [2/10], Step [300/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5090, Valid Precision: 0.4863, Valid Recall: 0.2441
+[13:53:05] Epoch [2/10], Step [400/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5106, Valid Precision: 0.4883, Valid Recall: 0.2208
+[13:53:38] Epoch [2/10], Step [500/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5110, Valid Precision: 0.4878, Valid Recall: 0.1949
+[13:54:10] Epoch [2/10], Step [600/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5100, Valid Precision: 0.4832, Valid Recall: 0.1684
+[13:54:42] Epoch [2/10], Step [700/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5114, Valid Precision: 0.4853, Valid Recall: 0.1450
+[13:55:15] Epoch [2/10], Step [800/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5124, Valid Precision: 0.4868, Valid Recall: 0.1264
+[13:55:47] Epoch [2/10], Step [900/2144], Train Loss: 0.6932, Valid Loss: 0.6932, Valid Accuracy: 0.5123, Valid Precision: 0.4843, Valid Recall: 0.1078
+[13:56:19] Epoch [2/10], Step [1000/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5139, Valid Precision: 0.4909, Valid Recall: 0.0987
+[13:56:51] Epoch [2/10], Step [1100/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5136, Valid Precision: 0.4872, Valid Recall: 0.0828
+[13:57:24] Epoch [2/10], Step [1200/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5141, Valid Precision: 0.4885, Valid Recall: 0.0711
+[13:57:56] Epoch [2/10], Step [1300/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5139, Valid Precision: 0.4849, Valid Recall: 0.0592
+[13:58:28] Epoch [2/10], Step [1400/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5147, Valid Precision: 0.4901, Valid Recall: 0.0531
+[13:59:01] Epoch [2/10], Step [1500/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5145, Valid Precision: 0.4866, Valid Recall: 0.0440
+[13:59:33] Epoch [2/10], Step [1600/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5154, Valid Precision: 0.4957, Valid Recall: 0.0374
+[14:00:05] Epoch [2/10], Step [1700/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5156, Valid Precision: 0.4989, Valid Recall: 0.0317
+[14:00:38] Epoch [2/10], Step [1800/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5149, Valid Precision: 0.4863, Valid Recall: 0.0289
+[14:01:10] Epoch [2/10], Step [1900/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5151, Valid Precision: 0.4882, Valid Recall: 0.0246
+[14:01:42] Epoch [2/10], Step [2000/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5152, Valid Precision: 0.4878, Valid Recall: 0.0203
+[14:02:14] Epoch [2/10], Step [2100/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5153, Valid Precision: 0.4885, Valid Recall: 0.0175
+[14:02:42] Epoch [2/10], Step [2144/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5153, Valid Precision: 0.4881, Valid Recall: 0.0151
+[14:03:14] Epoch [3/10], Step [100/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5152, Valid Precision: 0.4854, Valid Recall: 0.0152
+[14:03:46] Epoch [3/10], Step [200/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5155, Valid Precision: 0.4943, Valid Recall: 0.0150
+[14:04:19] Epoch [3/10], Step [300/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5156, Valid Precision: 0.4980, Valid Recall: 0.0147
+[14:04:51] Epoch [3/10], Step [400/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5153, Valid Precision: 0.4863, Valid Recall: 0.0144
+[14:05:23] Epoch [3/10], Step [500/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5152, Valid Precision: 0.4827, Valid Recall: 0.0141
+[14:05:55] Epoch [3/10], Step [600/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5154, Valid Precision: 0.4895, Valid Recall: 0.0140
+[14:06:27] Epoch [3/10], Step [700/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5157, Valid Precision: 0.5000, Valid Recall: 0.0137
+[14:06:59] Epoch [3/10], Step [800/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5155, Valid Precision: 0.4933, Valid Recall: 0.0133
+[14:07:31] Epoch [3/10], Step [900/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5153, Valid Precision: 0.4837, Valid Recall: 0.0132
+[14:08:03] Epoch [3/10], Step [1000/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5155, Valid Precision: 0.4908, Valid Recall: 0.0131
+[14:08:35] Epoch [3/10], Step [1100/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5154, Valid Precision: 0.4873, Valid Recall: 0.0126
+[14:09:07] Epoch [3/10], Step [1200/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5156, Valid Precision: 0.4961, Valid Recall: 0.0130
+[14:09:39] Epoch [3/10], Step [1300/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5152, Valid Precision: 0.4795, Valid Recall: 0.0122
+[14:10:11] Epoch [3/10], Step [1400/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5154, Valid Precision: 0.4897, Valid Recall: 0.0128
+[14:10:43] Epoch [3/10], Step [1500/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5155, Valid Precision: 0.4929, Valid Recall: 0.0122
+[14:11:16] Epoch [3/10], Step [1600/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5158, Valid Precision: 0.5042, Valid Recall: 0.0127
+[14:11:48] Epoch [3/10], Step [1700/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5156, Valid Precision: 0.4948, Valid Recall: 0.0122
+[14:12:20] Epoch [3/10], Step [1800/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5157, Valid Precision: 0.4984, Valid Recall: 0.0117
+[14:12:52] Epoch [3/10], Step [1900/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5155, Valid Precision: 0.4905, Valid Recall: 0.0118
+[14:13:24] Epoch [3/10], Step [2000/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5154, Valid Precision: 0.4864, Valid Recall: 0.0114
+[14:13:56] Epoch [3/10], Step [2100/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5153, Valid Precision: 0.4814, Valid Recall: 0.0111
+[14:14:25] Epoch [3/10], Step [2144/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5153, Valid Precision: 0.4828, Valid Recall: 0.0108
+[14:14:57] Epoch [4/10], Step [100/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5156, Valid Precision: 0.4942, Valid Recall: 0.0106
+[14:15:29] Epoch [4/10], Step [200/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5154, Valid Precision: 0.4851, Valid Recall: 0.0105
+[14:16:01] Epoch [4/10], Step [300/2144], Train Loss: 0.6932, Valid Loss: 0.6931, Valid Accuracy: 0.5156, Valid Precision: 0.4952, Valid Recall: 0.0105
+[14:16:33] Epoch [4/10], Step [400/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5153, Valid Precision: 0.4819, Valid Recall: 0.0102
+[14:17:05] Epoch [4/10], Step [500/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5154, Valid Precision: 0.4861, Valid Recall: 0.0100
+[14:17:37] Epoch [4/10], Step [600/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5158, Valid Precision: 0.5042, Valid Recall: 0.0104
+[14:18:09] Epoch [4/10], Step [700/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5157, Valid Precision: 0.4989, Valid Recall: 0.0101
+[14:18:41] Epoch [4/10], Step [800/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5155, Valid Precision: 0.4893, Valid Recall: 0.0096
+[14:19:13] Epoch [4/10], Step [900/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5155, Valid Precision: 0.4924, Valid Recall: 0.0095
+[14:19:45] Epoch [4/10], Step [1000/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5157, Valid Precision: 0.4998, Valid Recall: 0.0094
+[14:20:17] Epoch [4/10], Step [1100/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5158, Valid Precision: 0.5039, Valid Recall: 0.0096
+[14:20:49] Epoch [4/10], Step [1200/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5156, Valid Precision: 0.4939, Valid Recall: 0.0091
+[14:21:21] Epoch [4/10], Step [1300/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5156, Valid Precision: 0.4972, Valid Recall: 0.0092
+[14:21:53] Epoch [4/10], Step [1400/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5153, Valid Precision: 0.4792, Valid Recall: 0.0087
+[14:22:25] Epoch [4/10], Step [1500/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5153, Valid Precision: 0.4775, Valid Recall: 0.0081
+[14:22:57] Epoch [4/10], Step [1600/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5155, Valid Precision: 0.4869, Valid Recall: 0.0082
+[14:23:29] Epoch [4/10], Step [1700/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5155, Valid Precision: 0.4912, Valid Recall: 0.0082
+[14:24:01] Epoch [4/10], Step [1800/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5157, Valid Precision: 0.5018, Valid Recall: 0.0085
+[14:24:33] Epoch [4/10], Step [1900/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5155, Valid Precision: 0.4884, Valid Recall: 0.0079
+[14:25:05] Epoch [4/10], Step [2000/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5153, Valid Precision: 0.4777, Valid Recall: 0.0078
+[14:25:37] Epoch [4/10], Step [2100/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5155, Valid Precision: 0.4888, Valid Recall: 0.0080
+[14:26:06] Epoch [4/10], Step [2144/2144], Train Loss: 0.6931, Valid Loss: 0.6931, Valid Accuracy: 0.5156, Valid Precision: 0.4914, Valid Recall: 0.0079
+[14:26:06] No best model in epoch 0, best accuracy: 0.5157906227825992
+[14:26:06] Training finished
+[14:26:07] training end, time cost: 3040.9142005443573s

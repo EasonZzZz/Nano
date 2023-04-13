@@ -160,7 +160,7 @@ def call_modifications(args):
             motifs=args.motifs,
             mod_loc=args.mod_loc_in_motif,
             kmer_len=args.seq_len,
-            methyl_label=-1,
+            methyl_label=0,
             positions_file=None,
             output_dir=os.path.join(args.output, "features"),
             overwrite=True,

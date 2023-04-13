@@ -28,11 +28,17 @@ def train(args):
     else:
         logger.info("Using CPU")
     logger.info("Loading data")
-    train_dataset = SignalFeatureData(data_dir=args.train_file)
+    if os.path.isfile(args.train_file):
+        train_dataset = SignalFeatureData(data_file=args.train_file)
+    else:
+        train_dataset = SignalFeatureData(data_dir=args.train_file)
     train_dataloader = DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True
     )
-    valid_dataset = SignalFeatureData(data_dir=args.valid_file)
+    if os.path.isfile(args.valid_file):
+        valid_dataset = SignalFeatureData(data_file=args.valid_file)
+    else:
+        valid_dataset = SignalFeatureData(data_dir=args.valid_file)
     valid_dataloader = DataLoader(
         valid_dataset, batch_size=args.batch_size, shuffle=False
     )
@@ -81,7 +87,7 @@ def train(args):
     if args.optimizer == "Adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     elif args.optimizer == "SGD":
-        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr)
     else:
         logger.error("Invalid optimizer: {}".format(args.optimizer))
         raise ValueError("Invalid optimizer: {}".format(args.optimizer))
@@ -90,11 +96,9 @@ def train(args):
     logger.info("Start training")
     train_step = len(train_dataloader)
     logger.info("Train step: {}".format(train_step))
-    best_accuracy = 0
+    best_accuracy, best_epoch = 0, 0
     model.train()
     for epoch in range(args.num_epochs):
-        curr_best_accuracy_epoch = 0
-        no_best_model = True
         train_losses = []
         for i, data in enumerate(train_dataloader):
             _, features, labels = data
@@ -106,12 +110,11 @@ def train(args):
             outputs = model(features)
             loss = criterion(outputs, labels)
             train_losses.append(loss.detach().item())
-            print("Epoch: {}, Step: {}, Loss: {}".format(epoch, i, loss.detach().item()))
 
             # backward pass
             optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
             optimizer.step()
 
             if (i + 1) % args.log_interval == 0 or (i + 1) == train_step:
@@ -137,8 +140,7 @@ def train(args):
                     valid_recall = metrics.recall_score(valid_labels, valid_predicted)
                     if valid_accuracy > best_accuracy:
                         best_accuracy = valid_accuracy
-                        curr_best_accuracy_epoch = epoch
-                        no_best_model = False
+                        best_epoch = epoch
                         torch.save(
                             {
                                 "epoch": epoch,
@@ -150,6 +152,8 @@ def train(args):
                                 args.batch_size, args.signal_len, epoch
                             ),
                         )
+                        logger.info("Saved a new best model at epoch {} with accuracy {:.4f}"
+                                    .format(epoch, valid_accuracy))
                     logger.info(
                         "Epoch [{}/{}], Step [{}/{}], Train Loss: {:.4f}, Valid Loss: {:.4f}, Valid Accuracy: {:.4f},"
                         " Valid Precision: {:.4f}, Valid Recall: {:.4f}".format(
@@ -167,9 +171,6 @@ def train(args):
                     train_losses = []
                 model.train()
         scheduler.step()
-        if no_best_model:
-            logger.info("No best model in epoch {}, best accuracy: {}".format(curr_best_accuracy_epoch, best_accuracy))
-            break
     logger.info("Training finished")
 
 

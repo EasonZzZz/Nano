@@ -1,7 +1,11 @@
+import glob
+import os
+import re
 import unittest
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import torch
 
 from nano import extract_features
@@ -34,7 +38,6 @@ class MyTestCase(unittest.TestCase):
         self.assertNotEqual(len(dataset), 0)
         print(len(dataset))
         print(dataset[0])
-        print(dataset.get_info(0))
 
     def test_model(self):
         model = ModelBiLSTM()
@@ -55,8 +58,62 @@ class MyTestCase(unittest.TestCase):
 
     def test(self):
         self.assertEqual(True, True)
-        from statsmodels.stats.stattools import robust_kurtosis, robust_skewness
-        print(robust_skewness([1])[0] == np.nan)
+        train_loss = []
+        valid_loss = []
+        valid_acc = []
+        with open("../train.log") as f:
+            for line in f:
+                if "Epoch" in line:
+                    line = line.split(", ")
+                    for l in line:
+                        if 'Train Loss' in l:
+                            train_loss.append(float(re.findall(r"[-+]?\d*\.\d+|\d+", l)[0]))
+                        elif 'Valid Loss' in l:
+                            valid_loss.append(float(re.findall(r"[-+]?\d*\.\d+|\d+", l)[0]))
+                        elif 'Valid Accuracy' in l:
+                            valid_acc.append(float(re.findall(r"[-+]?\d*\.\d+|\d+", l)[0]))
+        plt.plot(train_loss, label="train")
+        plt.plot(valid_loss, label="valid")
+        plt.title("loss")
+        plt.legend()
+        plt.show()
+
+        plt.plot(valid_acc)
+        plt.title("valid accuracy")
+        plt.show()
+
+    def test_sample(self):
+        from imblearn.under_sampling import RandomUnderSampler
+
+        self.assertEqual(True, True)
+
+
+        train = pd.read_csv("../test_data/output/features_0.csv")
+        methyl = train[train['methyl_label'] == 1]
+        unmethyl = train[train['methyl_label'] == 0]
+
+        _methyl = methyl.copy()
+        for i in range(len(unmethyl) // len(methyl) - 1):
+            methyl = pd.concat([methyl, _methyl], axis=0)
+
+        # unmethyl = unmethyl.sample(n=len(methyl), random_state=42)
+        train = pd.concat([methyl, unmethyl], axis=0)
+        print(train['methyl_label'].value_counts())
+
+        # base2code = {'A': '0', 'C': '1', 'G': '2', 'T': '3', 'N': '4'}
+        # code2base = {v: k for k, v in base2code.items()}
+        # x_train = train.drop(["read_id", "chrom", "pos", "strand", 'methyl_label'], axis=1)
+        # x_train['kmer'] = x_train['kmer'].apply(lambda x: ''.join([base2code[base] for base in x]))
+        # y_train = train['methyl_label']
+        # print(y_train.value_counts())
+        #
+        # rus = RandomUnderSampler(random_state=42)
+        # x_train, y_train = rus.fit_resample(x_train, y_train)
+        # print(y_train.value_counts())
+        #
+        # train = pd.concat([x_train, y_train], axis=1)
+        # train['kmer'] = train['kmer'].apply(lambda x: ''.join([code2base[base] for base in x]))
+        # train['read_id'], train['chrom'], train['pos'], train['strand'] = np.null, np.null, np.null, np.null
 
 
 if __name__ == '__main__':

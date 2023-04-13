@@ -3,25 +3,30 @@ import os
 
 import numpy as np
 import pandas as pd
-import torch
 
 from torch.utils.data import Dataset
 
-
-base2code = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'N': 4}
-code2base = {0: 'A', 1: 'C', 2: 'G', 3: 'T', 4: 'N'}
+from nano.utils.constant import BASE2INT
 
 
 class SignalFeatureData(Dataset):
-    def __init__(self, data_dir, transform=None):
+    def __init__(self, data_dir=None, data_file=None, transform=None):
         self.data_dir = data_dir
+        self.data_file = data_file
+        if data_dir is None and data_file is None:
+            raise ValueError("Please provide data_dir or data_file")
+        if data_dir is not None and data_file is not None:
+            raise ValueError("Please provide only one of data_dir or data_file")
         self.transform = transform
         self.info, self.data, self.label = self.load_data()
 
     def load_data(self):
         df = pd.DataFrame()
-        for file in glob.glob(os.path.join(self.data_dir, "features_*.csv")):
-            df = pd.concat([df, pd.read_csv(file)], axis=0)
+        if self.data_file is not None:
+            df = pd.read_csv(self.data_file)
+        else:
+            for file in glob.glob(os.path.join(self.data_dir, "features_*.csv")):
+                df = pd.concat([df, pd.read_csv(file)], axis=0)
         if len(df) == 0:
             raise ValueError("No data found in {}".format(self.data_dir))
         info = []
@@ -30,7 +35,7 @@ class SignalFeatureData(Dataset):
         info = np.array(info)
 
         data = df.drop(['read_id', 'chrom', 'pos', 'strand', 'methyl_label'], axis=1)
-        data['kmer'] = data['kmer'].apply(lambda x: np.array([base2code[base] for base in x]))
+        data['kmer'] = data['kmer'].apply(lambda x: np.array([BASE2INT[base] for base in x]))
         data['signals'] = data['signals'].apply(lambda x: x.replace('[', '').replace(']', '').split(', '))
         data['signals'] = data['signals'].apply(lambda x: np.array(x).astype(float).reshape(-1, 16))
         for col in data.columns:
