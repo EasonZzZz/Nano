@@ -3,10 +3,12 @@ import os
 import re
 import unittest
 
+import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from sklearn import metrics
 
 from nano import extract_features
 from nano import dataloader
@@ -83,14 +85,16 @@ class MyTestCase(unittest.TestCase):
         plt.show()
 
     def test_sample(self):
-        from imblearn.under_sampling import RandomUnderSampler
-
         self.assertEqual(True, True)
-
 
         train = pd.read_csv("../test_data/output/features_0.csv")
         methyl = train[train['methyl_label'] == 1]
         unmethyl = train[train['methyl_label'] == 0]
+
+        cnt = train['kmer'].value_counts().sort_values()
+        sns.barplot(y=cnt.values, x=cnt.index)
+        plt.xticks(rotation=90, fontsize=5)
+        plt.show()
 
         _methyl = methyl.copy()
         for i in range(len(unmethyl) // len(methyl) - 1):
@@ -114,6 +118,24 @@ class MyTestCase(unittest.TestCase):
         # train = pd.concat([x_train, y_train], axis=1)
         # train['kmer'] = train['kmer'].apply(lambda x: ''.join([code2base[base] for base in x]))
         # train['read_id'], train['chrom'], train['pos'], train['strand'] = np.null, np.null, np.null, np.null
+
+    def test_plot(self):
+        self.assertEqual(True, True)
+        labels = pd.read_csv("../test_data/0420/2/labels.csv")
+        accuracy = np.load("../test_data/0420/2/accuracy.npy")
+
+        plt.rcParams['figure.figsize'] = (6, 8)
+        sns.boxplot(accuracy)
+        plt.title("Accuracy: {}".format(np.mean(accuracy)))
+        plt.show()
+
+        cm = metrics.confusion_matrix(labels['true'].to_numpy(), labels['pred'].to_numpy(), labels=[0, 1])
+        plt.rcParams['figure.figsize'] = (8, 8)
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False,
+                    xticklabels=['Unmethylated', 'Methylated'], yticklabels=['Unmethylated', 'Methylated'])
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.show()
 
 
 if __name__ == '__main__':

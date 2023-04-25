@@ -141,17 +141,9 @@ def train(args):
                     if valid_accuracy > best_accuracy:
                         best_accuracy = valid_accuracy
                         best_epoch = epoch
-                        torch.save(
-                            {
-                                "epoch": epoch,
-                                "model_state_dict": model.state_dict(),
-                                "optimizer_state_dict": optimizer.state_dict(),
-                                "loss": loss,
-                            },
-                            model_dir + args.model_type + ".b{}_s{}_epoch{}.ckpt".format(
-                                args.batch_size, args.signal_len, epoch
-                            ),
-                        )
+                        torch.save(model.state_dict(), model_dir + args.model_type + ".b{}_s{}_epoch{}.ckpt".format(
+                            args.batch_size, args.seq_len, epoch
+                        ))
                         logger.info("Saved a new best model at epoch {} with accuracy {:.4f}"
                                     .format(epoch, valid_accuracy))
                     logger.info(

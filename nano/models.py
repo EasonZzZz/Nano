@@ -17,7 +17,7 @@ def get_lout(lin, strides):
 
 class ModelBiLSTM(nn.Module):
     def __init__(
-        self, seq_len=9, signal_len=16, num_combine_layers=2, num_pre_layers=1, num_classes=2,
+        self, seq_len=9, signal_len=16, num_combine_layers=2, num_pre_layers=2, num_classes=2,
         dropout=0.5, hidden_size=256, vocab_size=16, embedding_size=4,
         using_base=True, using_signal_len=True, model_type="Both_BiLSTM", device=0
     ):
