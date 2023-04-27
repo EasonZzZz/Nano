@@ -5,7 +5,6 @@ output: a csv file with the following columns:
     signal_mean, signal_std, signal_skew, signal_kurt,
     signal_length, signals, methyl_label
 """
-import glob
 import os
 import argparse
 import random

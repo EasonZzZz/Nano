@@ -1,4 +1,5 @@
 import glob
+import multiprocessing
 import os
 import re
 import unittest
@@ -87,7 +88,7 @@ class MyTestCase(unittest.TestCase):
     def test_sample(self):
         self.assertEqual(True, True)
 
-        train = pd.read_csv("../test_data/output/features_0.csv")
+        train = pd.read_csv("../test_data/data/features_0.csv")
         methyl = train[train['methyl_label'] == 1]
         unmethyl = train[train['methyl_label'] == 0]
 
@@ -103,6 +104,8 @@ class MyTestCase(unittest.TestCase):
         # unmethyl = unmethyl.sample(n=len(methyl), random_state=42)
         train = pd.concat([methyl, unmethyl], axis=0)
         print(train['methyl_label'].value_counts())
+
+        print(len(train[0::3]))
 
         # base2code = {'A': '0', 'C': '1', 'G': '2', 'T': '3', 'N': '4'}
         # code2base = {v: k for k, v in base2code.items()}

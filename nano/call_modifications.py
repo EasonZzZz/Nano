@@ -1,21 +1,24 @@
+import glob
 import os
 import shutil
 import time
 import argparse
 import uuid
+
+import pandas as pd
 import torch
 
 import numpy as np
 import torch.multiprocessing as mp
 
-from torch.multiprocessing import Queue
 from torch.utils.data import DataLoader
 
 from nano.dataloader import SignalFeatureData
 from nano.extract_features import extract_features
 from nano.models import ModelBiLSTM
 from nano.utils import logging
-from nano.utils.constant import USE_CUDA, QUEUE_BORDER_SIZE, SLEEP_TIME
+from nano.utils.constant import USE_CUDA, QUEUE_BORDER_SIZE, SLEEP_TIME, BASE2INT
+from nano.utils.process_utils import Queue
 
 try:
     mp.set_start_method('spawn')
@@ -25,14 +28,24 @@ os.environ['MKL_THREADING_LAYER'] = 'GNU'
 logger = logging.get_logger(__name__, level=logging.INFO)
 
 
-def _divide_batches(features_loader):
-    # todo: put too large text into queue, then the proc will hang, need to fix
-    queue = Queue()
-    for i, data in enumerate(features_loader):
-        info, features, labels = data
-        queue.put([info, features])
-    queue.put(None)
-    return queue
+def _preprocess(features_path):
+    features = pd.DataFrame()
+    for file in glob.glob(os.path.join(features_path, "features_*.csv")):
+        features = pd.concat([features, pd.read_csv(file)], axis=0)
+    if len(features) == 0:
+        logger.error("No features found in {}".format(features_path))
+        return
+    features['kmer'] = features['kmer'].apply(lambda x: np.array([BASE2INT[base] for base in x]))
+    features['signals'] = features['signals'].apply(lambda x: x.replace('[', '').replace(']', '').split(', '))
+    features['signals'] = features['signals'].apply(lambda x: np.array(x).astype(float).reshape(-1, 16))
+    for col in features.columns:
+        if col in ['kmer', 'signals', 'read_id', 'chrom', 'pos', 'strand']:
+            continue
+        features[col] = features[col].apply(
+            lambda x: np.array(x[1:-1].split(',')).astype(float) if isinstance(x, str) else x
+        )
+    features.drop(['methyl_label'], axis=1, inplace=True)
+    return features
 
 
 def _call_modifications(model, features_batch, batch_size, device):
@@ -56,7 +69,6 @@ def _call_modifications(model, features_batch, batch_size, device):
             predicts = pred
         else:
             predicts = np.concatenate([predicts, pred], axis=0)
-    print(predicts.shape)
     return predicts
 
 
@@ -77,26 +89,25 @@ def _call_modifications_gpu_worker(features_batch_q, predict_q, model_path, args
         using_base=args.using_base,
         using_signal_len=args.using_signal_len,
     )
-    # model.load_state_dict(torch.load(model_path, map_location="cuda:{}".format(device)))
+    # model.load_state_dict(torch.load(model_path))
     if USE_CUDA:
         model = model.cuda(device)
     model.eval()
 
     batch_num_total = 0
     while True:
-        # if features_batch_q.empty():
-        #     time.sleep(SLEEP_TIME)
-        #     continue
+        if features_batch_q.empty():
+            time.sleep(SLEEP_TIME)
+            continue
         features_batch = features_batch_q.get()
         if features_batch is None:
             features_batch_q.put(None)
             break
         pred = _call_modifications(model, features_batch, args.batch_size, device)
         predict_q.put(pred)
-        # while predict_q.qsize() > QUEUE_BORDER_SIZE:
-        #     time.sleep(SLEEP_TIME)
+        while predict_q.qsize() > QUEUE_BORDER_SIZE:
+            time.sleep(SLEEP_TIME)
         batch_num_total += len(features_batch) // args.batch_size + 1
-        print(batch_num_total)
     logger.info("Calling modifications worker-{} processed {} batches in {:.2f} s".format(
         os.getpid(), batch_num_total, time.time() - start_time))
 
@@ -105,17 +116,23 @@ def _write_modifications(pred_q, output_dir, success_file):
     pass
 
 
-def _call_modifications_gpu(features_dataset, model_path, success_file, args):
-    features_loader = DataLoader(features_dataset, batch_size=args.f5_batch_size * 1000, shuffle=False)
-    features_batch_q = _divide_batches(features_loader)
-    predict_q = Queue()
+def _call_modifications_gpu(features_path, model_path, success_file, args):
+    # loading features
+    features = _preprocess(features_path)
 
+    # calling modifications
+    predict_q = Queue()
     procs = []
     for i in range(args.processes):
-        p = mp.Process(target=_call_modifications_gpu_worker, args=(features_batch_q, predict_q, model_path, args))
+        p = mp.Process(target=_call_modifications_gpu_worker,
+                       args=(features[i::args.processes], predict_q, model_path, args, i))
+        p.daemon = True
         p.start()
         procs.append(p)
+
+    # writing modifications
     p_w = mp.Process(target=_write_modifications, args=(predict_q, args.output, success_file))
+    p_w.daemon = True
     p_w.start()
 
     for p in procs:
@@ -168,17 +185,14 @@ def call_modifications(args):
             processes=args.processes,
             batch_size=args.f5_batch_size,
         )
-        features_dataset = SignalFeatureData(os.path.join(args.output, "features"))
+        features_path = os.path.join(args.output, "features")
     else:
         logger.info("Loading features from {}".format(input_path))
-        features_dataset = SignalFeatureData(input_path)
-    if len(features_dataset) == 0:
-        logger.error("No features extracted")
-        return
+        features_path = input_path
     if USE_CUDA:
-        _call_modifications_gpu(features_dataset, model_path, success_file, args)
+        _call_modifications_gpu(features_path, model_path, success_file, args)
     else:
-        _call_modifications_cpu(features_dataset, model_path, success_file, args)
+        _call_modifications_cpu(features_path, model_path, success_file, args)
 
     logger.info("Finish calling modifications, time used: {:.2f} seconds".format(time.time() - start_time))
 
