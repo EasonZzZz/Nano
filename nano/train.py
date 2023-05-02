@@ -76,7 +76,7 @@ def train(args):
         params = torch.load(args.pretrained_model) if USE_CUDA else torch.load(
             args.pretrained_model, map_location="cpu"
         )
-        model.load_state_dict(params["model_state_dict"])
+        model.load_state_dict(params)
 
     logger.info("Training model")
     weight = torch.FloatTensor([1, args.pos_weight])
@@ -141,8 +141,8 @@ def train(args):
                     if valid_accuracy > best_accuracy:
                         best_accuracy = valid_accuracy
                         best_epoch = epoch
-                        torch.save(model.state_dict(), model_dir + args.model_type + ".b{}_s{}_epoch{}.ckpt".format(
-                            args.batch_size, args.seq_len, epoch
+                        torch.save(model.state_dict(), model_dir + args.model_type + ".b{}_s{}.ckpt".format(
+                            args.batch_size, args.seq_len
                         ))
                         logger.info("Saved a new best model at epoch {} with accuracy {:.4f}"
                                     .format(epoch, valid_accuracy))
