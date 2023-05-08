@@ -1,9 +1,7 @@
 """
 this file is used to extract features from the dataset.
-output: a csv file with the following columns:
-    read_id, chrom, pos, strand, kmer,
-    signal_mean, signal_std, signal_skew, signal_kurt,
-    signal_length, signals, methyl_label
+output: features_*.tsv
+header: read_id, chrom, pos, strand, kmer, mean, std, len, signals, methyl_label
 """
 import os
 import argparse
@@ -18,7 +16,6 @@ import pandas as pd
 import multiprocessing as mp
 
 from statsmodels.robust import mad
-from statsmodels.stats.stattools import robust_kurtosis, robust_skewness
 
 from nano.utils.constant import QUEUE_BORDER_SIZE, SLEEP_TIME, GLOBAL_KEY, READS_GROUP
 from nano.utils.process_utils import get_fast5s, get_motif_seqs, get_ref_loc_of_methyl_site, Queue
@@ -165,6 +162,19 @@ def _format_signal(signals_list, signal_len=16):
     return signals
 
 
+def _features_to_str(features):
+    """
+    Convert features to string.
+    """
+    read_id, chrom, pos, strand, kmers, signal_means, signal_stds, signal_lens, signals, methyl_label = features
+    means_str = ",".join([str(x) for x in signal_means])
+    stds_str = ",".join([str(x) for x in signal_stds])
+    lens_str = ",".join([str(x) for x in signal_lens])
+    signals_str = ";".join([",".join([str(y) for y in x]) for x in signals])
+    return "\t".join(
+        [read_id, chrom, str(pos), strand, kmers, means_str, stds_str, lens_str, signals_str, str(methyl_label)])
+
+
 def _extract_features(
         fast5s, error_queue, failed_align, corrected_group, basecall_subgroup, ref,
         motif_seqs, mod_loc, kmer_len, methyl_label, positions
@@ -175,7 +185,7 @@ def _extract_features(
     num_bases = (kmer_len - 1) // 2
 
     failed_counter, error_counter = 0, 0
-    features = pd.DataFrame()
+    features = []
     for fast5 in fast5s:
         try:
             raw_signal, events, info = get_raw_signal(fast5, corrected_group, basecall_subgroup)
@@ -189,7 +199,7 @@ def _extract_features(
                 seq += row["base"]
                 signal_list.append(raw_signal[row["start"]: row["start"] + row["length"]])
 
-            strand, chrom = info["strand"], info["chrom"]
+            read_id, strand, chrom = info['read_id'], info["strand"], info["chrom"]
             chrom_start, chrom_end = info["chrom_start"], info["chrom_end"]
             try:
                 chrom_len = ref.get_chrom_length(chrom)
@@ -212,32 +222,18 @@ def _extract_features(
 
                     kmers = seq[mod_loc_in_read - num_bases: mod_loc_in_read + num_bases + 1]
                     kmer_signals = signal_list[mod_loc_in_read - num_bases: mod_loc_in_read + num_bases + 1]
-                    signal_lens = [len(x) for x in kmer_signals]
 
-                    # adding features
                     signal_means = [np.mean(x) for x in kmer_signals]
                     signal_stds = [np.std(x) for x in kmer_signals]
-                    signal_skews = [robust_skewness(x)[0] if len(x) > 1 else 0 for x in kmer_signals]
-                    signal_kurts = [robust_kurtosis(x)[0] if len(x) > 1 else 0 for x in kmer_signals]
+                    signal_lens = [len(x) for x in kmer_signals]
                     signals = _format_signal(kmer_signals)
 
-                    feature_dict = {
-                        "read_id": info["read_id"],
-                        "chrom": chrom,
-                        "pos": pos,
-                        "strand": strand,
-                        "kmer": kmers,
-                        "signal_mean": signal_means,
-                        "signal_std": signal_stds,
-                        "signal_skew": signal_skews,
-                        "signal_kurt": signal_kurts,
-                        "signal_length": signal_lens,
-                        "signals": signals,
-                        "methyl_label": methyl_label
-                    }
-                    features = features.append(feature_dict, ignore_index=True)
-        except Exception:
+                    features.append(_features_to_str((read_id, chrom, pos, strand,
+                                                      kmers, signal_means, signal_stds, signal_lens, signals,
+                                                      methyl_label)))
+        except Exception as e:
             error_counter += 1
+            print(e)
             logger.error("Error occurred when processing file: {}".format(fast5))
             continue
     error_queue.put(error_counter)
@@ -255,45 +251,35 @@ def _extract_batch_features(
         if fast5s is None:
             fast5s_queue.put(None)
             break
-        features_list = _extract_features(
+        features_queue.put(_extract_features(
             fast5s, error_queue, failed_align, corrected_group, basecall_subgroup, ref,
             motif_seqs, mod_loc, kmer_len, methyl_label, positions
-        )
-        features_queue.put(features_list)
+        ))
         while features_queue.qsize() > QUEUE_BORDER_SIZE:
             time.sleep(SLEEP_TIME)
 
 
 def _write_features(
-        features_queue, output_dir, output_batch_size
+        features_queue, output_file
 ):
-    df_buffer = pd.DataFrame()
-    counter = 0
-    while True:
-        features = features_queue.get()
-        if features is None:
-            break
-        if len(features) == 0:
-            continue
-        df_buffer = pd.concat([df_buffer, features], axis=0)
-        output_path_file = os.path.join(output_dir, "features_{}.csv".format(counter))
-        if len(df_buffer) >= output_batch_size:
-            df_write = df_buffer.iloc[:output_batch_size]
-            df_buffer = df_buffer.iloc[output_batch_size:]
-            df_write.to_csv(output_path_file, index=False, header=True)
-            logger.info("Wrote features to {}.".format(output_path_file))
-            counter += 1
-    if len(df_buffer) > 0:
-        output_path_file = os.path.join(output_dir, "features_{}.csv".format(counter))
-        df_buffer.to_csv(output_path_file, index=False, header=True)
-        logger.info("Wrote features to {}.".format(output_path_file))
-    logger.info("Finished writing features to {}.".format(output_dir))
+    logger.info("writer process-{} started.".format(os.getpid()))
+    with open(output_file, "w") as f:
+        while True:
+            if features_queue.qsize() == 0:
+                time.sleep(SLEEP_TIME)
+                continue
+            features = features_queue.get()
+            if features is None:
+                break
+            for feature in features:
+                f.write(feature + "\n")
+            f.flush()
 
 
 def extract_features(
         fast5_dir, recursive, corrected_group, basecall_subgroup, ref_path,
         motifs, mod_loc, kmer_len, methyl_label, positions_file,
-        output_dir, overwrite, output_batch_size,
+        output_file, overwrite,
         processes, batch_size
 ):
     """
@@ -303,19 +289,17 @@ def extract_features(
         raise ValueError("kmer_len must be odd.")
     ref = DNAReference(ref_path)
     if positions_file is not None:
-        positions = pd.read_csv(positions_file, sep="\t", names=["chrom", "pos"], header=None)
-        positions["pos"] = positions["pos"].astype(str)
-        positions = set(positions.apply(lambda x: "\t".join(x), axis=1))
+        positions = pd.read_csv(positions_file, names=["chrom", "pos"], header=None)
+        positions = set(["\t".join([str(x[0]), str(x[1])]) for x in positions.values])
     else:
         positions = None
 
-    if os.path.exists(output_dir):
-        if overwrite:
-            shutil.rmtree(output_dir)
-        else:
-            raise RuntimeError("Output file already exists: {}".format(output_dir))
-    os.makedirs(output_dir)
-    # logging.init_logger(log_file=os.path.join(output_dir, "extract_features.log"))
+    if os.path.exists(output_file) and not overwrite:
+        logger.warning("Output file {} already exists.".format(output_file))
+        return
+    elif os.path.exists(output_file) and overwrite:
+        os.remove(output_file)
+    # logging.init_logger(log_file=output_file + ".log")
 
     start = time.time()
     fast5s_queue, motif_seqs, num_fast5s = _preprocess(
@@ -348,7 +332,7 @@ def extract_features(
     p_write = mp.Process(
         target=_write_features,
         args=(
-            features_queue, output_dir, output_batch_size
+            features_queue, output_file
         )
     )
     p_write.daemon = True
@@ -423,22 +407,18 @@ def main():
     )
     ep_extraction.add_argument(
         "--positions", "-pos", type=str, required=False, action="store", default=None,
-        help="A tab-separated file containing the positions_file interested."
+        help="A csv file containing the positions_file interested."
              "The first column is the chromosome, the second column is the position."
     )
 
     ep_output = extraction_parser.add_argument_group("Output")
     ep_output.add_argument(
-        "--output_dir", "-o", type=str, required=True, action="store",
-        help="Path to output directory."
+        "--output_file", "-o", type=str, required=True, action="store",
+        help="Path to output file."
     )
     ep_output.add_argument(
         "--overwrite", "-w", action="store_true", required=False, default=False,
         help="Overwrite existing output files."
-    )
-    ep_output.add_argument(
-        "--output_batch_size", "-obs", type=int, required=False, action="store", default=100000,
-        help="The number of features to write to disk in each batch."
     )
 
     extraction_parser.add_argument(
@@ -464,9 +444,8 @@ def main():
     methyl_label = args.methyl_label
     positions_file = args.positions
 
-    output_dir = args.output_dir
+    output_file = args.output_file
     overwrite = args.overwrite
-    output_batch_size = args.output_batch_size
 
     processes = args.processes
     batch_size = args.batch_size
@@ -474,7 +453,7 @@ def main():
     extract_features(
         fast5_dir, recursive, corrected_group, basecall_subgroup, ref_path,
         motifs, mod_loc_in_motif, kmer_len, methyl_label, positions_file,
-        output_dir, overwrite, output_batch_size,
+        output_file, overwrite,
         processes, batch_size
     )
 

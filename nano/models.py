@@ -50,7 +50,7 @@ class ModelBiLSTM(nn.Module):
             self.embedding = nn.Embedding(vocab_size, embedding_size)
             self.using_base = using_base
             self.using_signal_len = using_signal_len
-            self.signal_feature_num = 5 if self.using_signal_len else 4
+            self.signal_feature_num = 3 if self.using_signal_len else 2
             if self.using_base:
                 self.lstm_seq = nn.LSTM(
                     input_size=embedding_size + self.signal_feature_num,
@@ -114,28 +114,26 @@ class ModelBiLSTM(nn.Module):
         return h0, c0
 
     def forward(self, data):
-        kmer, means, stds, skews, kurts, signal_lens, signals = data
+        kmer, means, stds, signal_lens, signals = data
         out_seq, out_signal, out = None, None, None
         # Seq BiLSTM
         if self.model_type != "Signal_BiLSTM":
             means = torch.reshape(means, (-1, self.seq_len, 1)).float()
             stds = torch.reshape(stds, (-1, self.seq_len, 1)).float()
-            skews = torch.reshape(skews, (-1, self.seq_len, 1)).float()
-            kurts = torch.reshape(kurts, (-1, self.seq_len, 1)).float()
             signal_lens = torch.reshape(signal_lens, (-1, self.seq_len, 1)).float()
 
             # (batch_size, seq_len, feature_num)
             if self.using_signal_len:
                 kmer_embed = self.embedding(kmer.long())
                 if self.using_signal_len:
-                    out_seq = torch.cat((kmer_embed, means, stds, skews, kurts, signal_lens), dim=2)
+                    out_seq = torch.cat((kmer_embed, means, stds, signal_lens), dim=2)
                 else:
-                    out_seq = torch.cat((kmer_embed, means, stds, skews, kurts), dim=2)
+                    out_seq = torch.cat((kmer_embed, means, stds), dim=2)
             else:
                 if self.using_sigal_len:
-                    out_seq = torch.cat((means, stds, skews, kurts, signal_lens), dim=2)
+                    out_seq = torch.cat((means, stds, signal_lens), dim=2)
                 else:
-                    out_seq = torch.cat((means, stds, skews, kurts), dim=2)
+                    out_seq = torch.cat((means, stds), dim=2)
             # (batch_size, seq_len, hidden_size)
             out_seq, _ = self.lstm_seq(out_seq, self._init_hidden(out_seq.size(0), self.hidden_seq,
                                                                   self.num_combine_layers))

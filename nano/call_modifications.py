@@ -11,9 +11,6 @@ import torch
 import numpy as np
 import torch.multiprocessing as mp
 
-from torch.utils.data import DataLoader
-
-from nano.dataloader import SignalFeatureData
 from nano.extract_features import extract_features
 from nano.models import ModelBiLSTM
 from nano.utils import logging

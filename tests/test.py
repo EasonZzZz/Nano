@@ -17,7 +17,7 @@ from nano.models import ModelBiLSTM
 from nano.utils.constant import USE_CUDA
 
 data_dir = "../test_data/data"
-output_dir = "../test_data/output/features"
+features_file = "../test_data/output/features.txt"
 
 
 class MyTestCase(unittest.TestCase):
@@ -37,7 +37,7 @@ class MyTestCase(unittest.TestCase):
         print(info)
 
     def test_dataloader(self):
-        dataset = dataloader.SignalFeatureData(data_dir=output_dir)
+        dataset = dataloader.SignalFeatureData(features_file)
         self.assertNotEqual(len(dataset), 0)
         print(len(dataset))
         print(dataset[0])
@@ -46,7 +46,7 @@ class MyTestCase(unittest.TestCase):
         model = ModelBiLSTM()
         if USE_CUDA:
             model.cuda()
-        dataset = dataloader.SignalFeatureData(data_dir=output_dir)
+        dataset = dataloader.SignalFeatureData(features_file)
         self.assertNotEqual(len(dataset), 0)
         train_loader = torch.utils.data.DataLoader(dataset, batch_size=2, shuffle=True)
         for i, data in enumerate(train_loader):
@@ -105,22 +105,8 @@ class MyTestCase(unittest.TestCase):
         train = pd.concat([methyl, unmethyl], axis=0)
         print(train['methyl_label'].value_counts())
 
-        print(len(train[0::3]))
-
-        # base2code = {'A': '0', 'C': '1', 'G': '2', 'T': '3', 'N': '4'}
-        # code2base = {v: k for k, v in base2code.items()}
-        # x_train = train.drop(["read_id", "chrom", "pos", "strand", 'methyl_label'], axis=1)
-        # x_train['kmer'] = x_train['kmer'].apply(lambda x: ''.join([base2code[base] for base in x]))
-        # y_train = train['methyl_label']
-        # print(y_train.value_counts())
-        #
-        # rus = RandomUnderSampler(random_state=42)
-        # x_train, y_train = rus.fit_resample(x_train, y_train)
-        # print(y_train.value_counts())
-        #
-        # train = pd.concat([x_train, y_train], axis=1)
-        # train['kmer'] = train['kmer'].apply(lambda x: ''.join([code2base[base] for base in x]))
-        # train['read_id'], train['chrom'], train['pos'], train['strand'] = np.null, np.null, np.null, np.null
+        cnt = train['methyl_label'].value_counts().sort_values()
+        print(cnt[0])
 
     def test_plot(self):
         self.assertEqual(True, True)
@@ -139,6 +125,23 @@ class MyTestCase(unittest.TestCase):
         plt.xlabel('Predicted')
         plt.ylabel('True')
         plt.show()
+
+    def test_positions(self):
+        self.assertEqual(True, True)
+        df = pd.DataFrame(columns=['chrom', 'pos'])
+        names = ['chrom', 'pos', 'end', 'name', '?', 'strand', 'thickStart',
+                 'thickEnd', 'itemRgb', 'coverage', 'score']
+        mod = pd.read_csv("../test_data/modified_bases.5mC.bed", sep='\t', names=names)
+        mod = mod[['chrom', 'pos']]
+        mod['pos'] = mod['pos'].astype(str)
+        with open("../test_data/25张纸.txt") as f:
+            for i in range(25):
+                barcode = f.readline().strip()
+                pos = [("960-%d" % (i + 1), p) for p in f.readline().strip().split(' ')]
+                df = pd.concat([df, pd.DataFrame(pos, columns=['chrom', 'pos'])], axis=0)
+        df.to_csv("../test_data/25_barcode_methyl.csv", index=False)
+        mod = pd.concat([mod, df, df], axis=0).drop_duplicates(keep=False)
+        mod.to_csv("../test_data/25_barcode_unmethyl.csv", index=False)
 
 
 if __name__ == '__main__':

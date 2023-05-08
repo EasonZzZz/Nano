@@ -28,17 +28,11 @@ def train(args):
     else:
         logger.info("Using CPU")
     logger.info("Loading data")
-    if os.path.isfile(args.train_file):
-        train_dataset = SignalFeatureData(data_file=args.train_file)
-    else:
-        train_dataset = SignalFeatureData(data_dir=args.train_file)
+    train_dataset = SignalFeatureData(args.train_file)
     train_dataloader = DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True
     )
-    if os.path.isfile(args.valid_file):
-        valid_dataset = SignalFeatureData(data_file=args.valid_file)
-    else:
-        valid_dataset = SignalFeatureData(data_dir=args.valid_file)
+    valid_dataset = SignalFeatureData(args.valid_file)
     valid_dataloader = DataLoader(
         valid_dataset, batch_size=args.batch_size, shuffle=False
     )
