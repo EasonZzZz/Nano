@@ -1,6 +1,5 @@
 import argparse
 import os.path
-import re
 import time
 
 import numpy as np
@@ -16,8 +15,28 @@ from nano.utils import logging
 from nano.utils.constant import USE_CUDA
 from nano.dataloader import SignalFeatureData
 
-
 logger = logging.get_logger(__name__)
+
+
+def valid(model, valid_dataloader, criterion):
+    model.eval()
+    y_true, y_pred = [], []
+    loss = 0
+    with torch.no_grad():
+        for i, data in enumerate(valid_dataloader):
+            info, features, labels = data
+            if USE_CUDA:
+                features = [f.cuda() for f in features]
+                labels = labels.cuda()
+            pred = model(features)
+            loss += criterion(pred, labels).item()
+            if USE_CUDA:
+                labels = labels.cpu()
+                pred = pred.cpu()
+            y_true.extend(labels.numpy())
+            y_pred.extend(torch.argmax(pred, dim=1).numpy())
+    model.train()
+    return loss / len(valid_dataloader), metrics.accuracy_score(y_true, y_pred)
 
 
 def train(args):
@@ -28,27 +47,21 @@ def train(args):
     else:
         logger.info("Using CPU")
     logger.info("Loading data")
-    train_dataset = SignalFeatureData(args.train_file)
     train_dataloader = DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=True
+        SignalFeatureData(args.train_file),
+        batch_size=args.batch_size, shuffle=True,
+        num_workers=args.num_workers, pin_memory=True
     )
-    valid_dataset = SignalFeatureData(args.valid_file)
     valid_dataloader = DataLoader(
-        valid_dataset, batch_size=args.batch_size, shuffle=False
+        SignalFeatureData(args.test_file),
+        batch_size=args.batch_size, shuffle=True,
+        num_workers=args.num_workers, pin_memory=True
     )
 
     logger.info("Loading model")
     model_dir = args.model_dir
-    if model_dir != "/":
-        model_dir = os.path.abspath(model_dir).rstrip("/")
-        if not os.path.exists(model_dir):
-            os.makedirs(model_dir)
-        else:
-            model_regex = re.compile(r"" + args.model_type + "\.b\d+_s\d+_epoch\d+\.ckpt*")
-            for file in os.listdir(model_dir):
-                if model_regex.match(file):
-                    os.remove(model_dir + "/" + str(file))
-        model_dir += "/"
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
     model = ModelBiLSTM(
         model_type=args.model_type,
         seq_len=args.seq_len,
@@ -93,7 +106,7 @@ def train(args):
     best_accuracy, best_epoch = 0, 0
     model.train()
     for epoch in range(args.num_epochs):
-        train_losses = []
+        train_loss = []
         for i, data in enumerate(train_dataloader):
             _, features, labels = data
             if USE_CUDA:
@@ -103,59 +116,27 @@ def train(args):
             # forward pass
             outputs = model(features)
             loss = criterion(outputs, labels)
-            train_losses.append(loss.detach().item())
+            train_loss.append(loss.detach().item())
 
             # backward pass
             optimizer.zero_grad()
             loss.backward()
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
             optimizer.step()
 
             if (i + 1) % args.log_interval == 0 or (i + 1) == train_step:
                 model.eval()
-                with torch.no_grad():
-                    valid_losses, valid_labels, valid_predicted = [], [], []
-                    for vi, vfeatures in enumerate(valid_dataloader):
-                        _, vfeatures, vlabels = vfeatures
-                        if USE_CUDA:
-                            vfeatures = [f.cuda() for f in vfeatures]
-                            vlabels = torch.LongTensor(vlabels).cuda()
-
-                        voutputs = model(vfeatures)
-                        vloss = criterion(voutputs, vlabels)
-                        valid_losses.append(vloss.detach().item())
-                        if USE_CUDA:
-                            vlabels = vlabels.cpu()
-                            voutputs = voutputs.cpu()
-                        valid_labels.extend(vlabels.numpy())
-                        valid_predicted.extend(voutputs.argmax(dim=1).numpy())
-                    valid_accuracy = metrics.accuracy_score(valid_labels, valid_predicted)
-                    valid_precision = metrics.precision_score(valid_labels, valid_predicted)
-                    valid_recall = metrics.recall_score(valid_labels, valid_predicted)
-                    if valid_accuracy > best_accuracy:
-                        best_accuracy = valid_accuracy
-                        best_epoch = epoch
-                        torch.save(model.state_dict(), model_dir + args.model_type + ".b{}_s{}.ckpt".format(
-                            args.batch_size, args.seq_len
-                        ))
-                        logger.info("Saved a new best model at epoch {} with accuracy {:.4f}"
-                                    .format(epoch, valid_accuracy))
-                    logger.info(
-                        "Epoch [{}/{}], Step [{}/{}], Train Loss: {:.4f}, Valid Loss: {:.4f}, Valid Accuracy: {:.4f},"
-                        " Valid Precision: {:.4f}, Valid Recall: {:.4f}".format(
-                            epoch + 1,
-                            args.num_epochs,
-                            i + 1,
-                            train_step,
-                            np.mean(train_losses),
-                            np.mean(valid_losses),
-                            valid_accuracy,
-                            valid_precision,
-                            valid_recall,
-                        )
-                    )
-                    train_losses = []
-                model.train()
+                valid_loss, valid_accuracy = valid(model, valid_dataloader, criterion)
+                if valid_accuracy > best_accuracy:
+                    best_accuracy = valid_accuracy
+                    torch.save(model.state_dict(), os.path.join(model_dir, "model.pt"))
+                    logger.info("Save model at epoch {}".format(epoch + 1))
+                logger.info(
+                    "Epoch [{}/{}], Step [{}/{}], Train Loss: {:.4f}, Valid Loss: {:.4f}, Valid Accuracy: {:.4f}".format(
+                        epoch + 1, args.num_epochs, i + 1, train_step,
+                        np.mean(train_loss), valid_loss, valid_accuracy
+                    ))
+                train_loss = []
         scheduler.step()
     logger.info("Training finished")
 
@@ -259,8 +240,8 @@ def main():
         help="pretrained model, default: None"
     )
     training_group.add_argument(
-        "--tmp_dir", type=str, default="./tmp", required=False,
-        help="tmp dir, default: ./tmp"
+        "--tmp_dir", type=str, default="/tmp", required=False,
+        help="tmp dir, default: /tmp"
     )
 
     args = parser.parse_args()

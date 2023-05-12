@@ -64,7 +64,7 @@ class MyTestCase(unittest.TestCase):
         train_loss = []
         valid_loss = []
         valid_acc = []
-        with open("../train.log") as f:
+        with open("../test_data/train.log") as f:
             for line in f:
                 if "Epoch" in line:
                     line = line.split(", ")
