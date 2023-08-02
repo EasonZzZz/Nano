@@ -25,26 +25,6 @@ os.environ['MKL_THREADING_LAYER'] = 'GNU'
 logger = logging.get_logger(__name__, level=logging.INFO)
 
 
-def _preprocess(features_path):
-    features = pd.DataFrame()
-    for file in glob.glob(os.path.join(features_path, "features_*.csv")):
-        features = pd.concat([features, pd.read_csv(file)], axis=0)
-    if len(features) == 0:
-        logger.error("No features found in {}".format(features_path))
-        return
-    features['kmer'] = features['kmer'].apply(lambda x: np.array([BASE2INT[base] for base in x]))
-    features['signals'] = features['signals'].apply(lambda x: x.replace('[', '').replace(']', '').split(', '))
-    features['signals'] = features['signals'].apply(lambda x: np.array(x).astype(float).reshape(-1, 16))
-    for col in features.columns:
-        if col in ['kmer', 'signals', 'read_id', 'chrom', 'pos', 'strand']:
-            continue
-        features[col] = features[col].apply(
-            lambda x: np.array(x[1:-1].split(',')).astype(float) if isinstance(x, str) else x
-        )
-    features.drop(['methyl_label'], axis=1, inplace=True)
-    return features
-
-
 def _call_modifications(model, features_batch, batch_size, device):
     predicts = None
     for i in range(0, len(features_batch), batch_size):
@@ -74,7 +54,7 @@ def _call_modifications_gpu_worker(features_batch_q, predict_q, model_path, args
     start_time = time.time()
     model = ModelBiLSTM(
         model_type=args.model_type,
-        seq_len=args.seq_len,
+        kmer_len=args.kmer_len,
         signal_len=args.signal_len,
         num_combine_layers=args.num_combine_layers,
         num_pre_layers=args.num_pre_layers,
@@ -113,13 +93,14 @@ def _write_modifications(pred_q, output_dir, success_file):
     pass
 
 
-def _call_modifications_gpu(features_path, model_path, success_file, args):
-    # loading features
-    features = _preprocess(features_path)
+def _call_modifications_gpu(features_file, model_path, success_file, args):
 
     # calling modifications
+    features_batch_q = Queue()
     predict_q = Queue()
     procs = []
+
+
     for i in range(args.processes):
         p = mp.Process(target=_call_modifications_gpu_worker,
                        args=(features[i::args.processes], predict_q, model_path, args, i))
@@ -173,23 +154,22 @@ def call_modifications(args):
             ref_path=args.reference,
             motifs=args.motifs,
             mod_loc=args.mod_loc_in_motif,
-            kmer_len=args.seq_len,
+            kmer_len=args.kmer_len,
             methyl_label=0,
             positions_file=None,
-            output_dir=os.path.join(args.output, "features"),
+            output_file=os.path.join(args.output, "features.txt"),
             overwrite=True,
-            output_batch_size=args.f5_batch_size * 1000,
             processes=args.processes,
-            batch_size=args.f5_batch_size,
+            batch_size=args.batch_size,
         )
-        features_path = os.path.join(args.output, "features")
+        features_file = os.path.join(args.output, "features.txt")
     else:
         logger.info("Loading features from {}".format(input_path))
-        features_path = input_path
+        features_file = input_path
     if USE_CUDA:
-        _call_modifications_gpu(features_path, model_path, success_file, args)
+        _call_modifications_gpu(features_file, model_path, success_file, args)
     else:
-        _call_modifications_cpu(features_path, model_path, success_file, args)
+        _call_modifications_cpu(features_file, model_path, success_file, args)
 
     logger.info("Finish calling modifications, time used: {:.2f} seconds".format(time.time() - start_time))
 
@@ -200,17 +180,13 @@ def main():
     input_group = parser.add_argument_group('Input parameters')
     input_group.add_argument(
         '--input', type=str, required=True,
-        help="The input file, can be feature files or fast5 files"
+        help="The input file, can be a feature file or fast5 files"
         "If is fast5 files, the extraction args should be provided"
     )
     input_group.add_argument(
         '--input_type', type=int, required=False, default=0,
         choices=[0, 1],
-        help="The input type, 0 for fast5 files, 1 for feature files"
-    )
-    input_group.add_argument(
-        "--f5_batch_size", type=int, default=100,
-        help="The batch size of fast5 files"
+        help="The input type, 0 for fast5 files, 1 for feature file"
     )
 
     model_group = parser.add_argument_group('Model parameters')

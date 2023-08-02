@@ -8,6 +8,11 @@ from nano.utils.constant import BASE2INT
 
 
 def str2features(features):
+    """
+    split features string to info (read_id, chrom, pos, strand), features (kmer, mean, std, len, signals), label
+    :param features: str
+    :return: info, features, label
+    """
     words = features.split('\t')
 
     info = "\t".join(words[:4])

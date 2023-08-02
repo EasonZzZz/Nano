@@ -15,6 +15,7 @@ from nano import extract_features
 from nano import dataloader
 from nano.models import ModelBiLSTM
 from nano.utils.constant import USE_CUDA
+from nano.utils.ref_helper import DNAReference
 
 data_dir = "../test_data/data"
 features_file = "../test_data/output/features.txt"
@@ -110,20 +111,19 @@ class MyTestCase(unittest.TestCase):
 
     def test_plot(self):
         self.assertEqual(True, True)
-        labels = pd.read_csv("../test_data/0420/2/labels.csv")
-        accuracy = np.load("../test_data/0420/2/accuracy.npy")
+        labels = pd.read_csv("../test_data/pred/test2_labels.csv")
+        accuracy = np.load("../test_data/pred/test2_accuracy.npy")
 
-        plt.rcParams['figure.figsize'] = (6, 8)
-        sns.boxplot(accuracy)
-        plt.title("Accuracy: {}".format(np.mean(accuracy)))
-        plt.show()
+        fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+        axes[0].boxplot(accuracy)
+        axes[0].set_title("Accuracy: {}".format(np.mean(accuracy)))
 
         cm = metrics.confusion_matrix(labels['true'].to_numpy(), labels['pred'].to_numpy(), labels=[0, 1])
-        plt.rcParams['figure.figsize'] = (8, 8)
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False,
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False, ax=axes[1],
                     xticklabels=['Unmethylated', 'Methylated'], yticklabels=['Unmethylated', 'Methylated'])
-        plt.xlabel('Predicted')
-        plt.ylabel('True')
+        axes[1].set_title("Confusion Matrix")
+        axes[1].legend()
+
         plt.show()
 
     def test_positions(self):
@@ -142,6 +142,42 @@ class MyTestCase(unittest.TestCase):
         df.to_csv("../test_data/25_barcode_methyl.csv", index=False)
         mod = pd.concat([mod, df, df], axis=0).drop_duplicates(keep=False)
         mod.to_csv("../test_data/25_barcode_unmethyl.csv", index=False)
+
+    def test_wrong_kmer(self):
+        self.assertEqual(True, True)
+        # df = pd.read_csv("../test_data/pred/test2_pred.csv", index_col=0)
+        # df.reset_index(inplace=True)
+        # df[['read_id', 'chrom', 'pos', 'strand']] = df['info'].str.split('\t', expand=True)
+        # df.drop(['info'], axis=1, inplace=True)
+        # ref = DNAReference("../test_data/1013.fa")
+        # df['kmer'] = df.apply(lambda x: ref.get_chrom_seq(x['chrom'])[int(x['pos']) - 4:int(x['pos']) + 6], axis=1)
+        # df.to_csv("../test_data/pred/test2_pred.csv", index=False)
+        df = pd.read_csv("../test_data/pred/test1_pred.csv")
+        df = df[df['pred'] != df['label']]
+
+        # fig, ax = plt.subplots(figsize=(10, 6))
+        # sns.countplot(x='kmer', hue='label', data=df, order=df['kmer'].value_counts().index, ax=ax)
+        # plt.xticks(rotation=90)
+        # fig.tight_layout()
+        # plt.show()
+        #
+        # fig, ax = plt.subplots(figsize=(10, 6))
+        # sns.countplot(x='pos', hue='label', data=df, order=df['pos'].value_counts().index, ax=ax)
+        # plt.xticks(rotation=90)
+        # fig.tight_layout()
+        # plt.show()
+
+        kmer_count = pd.DataFrame(df['kmer'].value_counts()).reset_index()
+        kmer_count.columns = ['kmer', 'count']
+        auc = np.load("../test_data/pred/mer_type_10_AUC.npy", allow_pickle=True)
+        auc = {i[0]: i[1] for i in auc}
+        kmer_count['auc'] = kmer_count['kmer'].map(auc).astype(float)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.barplot(x='kmer', y='auc', data=kmer_count, ax=ax, color='#1f77b4')
+        ax.set_ylim(0, 1)
+        plt.xticks(rotation=90)
+        fig.tight_layout()
+        plt.show()
 
 
 if __name__ == '__main__':

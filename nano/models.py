@@ -17,7 +17,7 @@ def get_lout(lin, strides):
 
 class ModelBiLSTM(nn.Module):
     def __init__(
-        self, seq_len=9, signal_len=16, num_combine_layers=2, num_pre_layers=2, num_classes=2,
+        self, kmer_len=9, signal_len=16, num_combine_layers=2, num_pre_layers=2, num_classes=2,
         dropout=0.5, hidden_size=256, vocab_size=16, embedding_size=4,
         using_base=True, using_signal_len=True, model_type="Both_BiLSTM", device=0
     ):
@@ -25,7 +25,7 @@ class ModelBiLSTM(nn.Module):
         self.model_type = model_type
         self.device = device
 
-        self.seq_len = seq_len
+        self.kmer_len = kmer_len
         self.signal_len = signal_len
         self.num_combine_layers = num_combine_layers
         self.num_pre_layers = num_pre_layers
@@ -118,9 +118,9 @@ class ModelBiLSTM(nn.Module):
         out_seq, out_signal, out = None, None, None
         # Seq BiLSTM
         if self.model_type != "Signal_BiLSTM":
-            means = torch.reshape(means, (-1, self.seq_len, 1)).float()
-            stds = torch.reshape(stds, (-1, self.seq_len, 1)).float()
-            signal_lens = torch.reshape(signal_lens, (-1, self.seq_len, 1)).float()
+            means = torch.reshape(means, (-1, self.kmer_len, 1)).float()
+            stds = torch.reshape(stds, (-1, self.kmer_len, 1)).float()
+            signal_lens = torch.reshape(signal_lens, (-1, self.kmer_len, 1)).float()
 
             # (batch_size, seq_len, feature_num)
             if self.using_signal_len:

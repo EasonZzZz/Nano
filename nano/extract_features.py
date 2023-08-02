@@ -6,7 +6,6 @@ header: read_id, chrom, pos, strand, kmer, mean, std, len, signals, methyl_label
 import os
 import argparse
 import random
-import shutil
 import time
 import warnings
 

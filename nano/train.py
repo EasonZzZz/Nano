@@ -50,12 +50,10 @@ def train(args):
     train_dataloader = DataLoader(
         SignalFeatureData(args.train_file),
         batch_size=args.batch_size, shuffle=True,
-        num_workers=args.num_workers, pin_memory=True
     )
     valid_dataloader = DataLoader(
-        SignalFeatureData(args.test_file),
+        SignalFeatureData(args.valid_file),
         batch_size=args.batch_size, shuffle=True,
-        num_workers=args.num_workers, pin_memory=True
     )
 
     logger.info("Loading model")
@@ -64,7 +62,7 @@ def train(args):
         os.makedirs(model_dir)
     model = ModelBiLSTM(
         model_type=args.model_type,
-        seq_len=args.seq_len,
+        kmer_len=args.kmer_len,
         signal_len=args.signal_len,
         num_combine_layers=args.num_combine_layers,
         num_pre_layers=args.num_pre_layers,
@@ -157,7 +155,7 @@ def main():
         choices=["Both_BiLSTM", "Seq_BiLSTM", "Signal_BiLSTM"],
         help="type of model to use, default: Both_BiLSTM, choices: Both_BiLSTM, Seq_BiLSTM, Signal_BiLSTM")
     model_group.add_argument(
-        "--seq_len", type=int, default=9, required=False,
+        "--kmer_len", type=int, default=9, required=False,
         help="len of kmers, default: 9"
     )
     model_group.add_argument(
